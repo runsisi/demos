@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(probe LANGUAGES C)
+project(kfprobe LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
