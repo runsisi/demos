@@ -1,0 +1,115 @@
+#!/usr/bin/env -S stap -B CONFIG_MODVERSIONS=y -g
+
+%{
+
+#include <linux/printk.h>
+#include <net/udp.h>
+#include <net/gro.h>
+
+#define UDP_GRO_CNT_MAX 64
+
+static struct sk_buff *udp_gro_receive_segment(struct list_head *head,
+    struct sk_buff *skb)
+{
+    struct udphdr *uh = udp_gro_udphdr(skb);
+    struct sk_buff *pp = NULL;
+    struct udphdr *uh2;
+    struct sk_buff *p;
+    unsigned int ulen;
+    int ret = 0;
+
+    /* requires non zero csum, for symmetry with GSO */
+    if (!uh->check) {
+        pr_info("0x%p: !check\n", skb);
+        return NULL;
+    }
+
+    /* Do not deal with padded or malicious packets, sorry ! */
+    ulen = ntohs(uh->len);
+    if (ulen <= sizeof(*uh) || ulen != skb_gro_len(skb)) {
+        pr_info("0x%p: ulen(%d) != skb_gro_len(skb)(%d), skb->len: %d\n", skb, ulen, skb_gro_len(skb), skb->len);
+        return NULL;
+    }
+
+    list_for_each_entry(p, head, list) {
+        pr_info("0x%p: 0x%p ulen: %d\n", skb, p, ulen);
+
+        if (!NAPI_GRO_CB(p)->same_flow) {
+            pr_info("0x%p: 0x%p !same_flow\n", skb, p);
+            continue;
+        }
+
+        uh2 = udp_hdr(p);
+
+        /* Match ports only, as csum is always non zero */
+        if ((*(u32 *)&uh->source != *(u32 *)&uh2->source)) {
+            pr_info("0x%p: 0x%p !source\n", skb, p);
+            continue;
+        }
+
+        if (NAPI_GRO_CB(skb)->is_flist != NAPI_GRO_CB(p)->is_flist) {
+            pr_info("0x%p: 0x%p !is_flist\n", skb, p);
+            return p;
+        }
+
+        /* Terminate the flow on len mismatch or if it grow "too much".
+         * Under small packet flood GRO count could elsewhere grow a lot
+         * leading to excessive truesize values.
+         * On len mismatch merge the first packet shorter than gso_size,
+         * otherwise complete the GRO packet.
+         */
+        if (ulen > ntohs(uh2->len)) {
+            pp = p;
+            pr_info("0x%p: 0x%p ulen > uh2->len\n", skb, p);
+        } else {
+            if (NAPI_GRO_CB(skb)->is_flist) {
+                if ((skb->ip_summed != p->ip_summed) ||
+                    (skb->csum_level != p->csum_level)) {
+                    pr_info("0x%p: 0x%p !csum\n", skb, p);
+                    return NULL;
+                }
+                // ret = skb_gro_receive_list(p, skb);
+
+                pr_info("0x%p: 0x%p skb_gro_receive_list\n", skb, p);
+            } else {
+                // ret = skb_gro_receive(p, skb);
+
+                pr_info("0x%p: 0x%p skb_gro_receive\n", skb, p);
+            }
+        }
+
+        if (ret || ulen != ntohs(uh2->len) || NAPI_GRO_CB(p)->count >= UDP_GRO_CNT_MAX) {
+            pp = p;
+            pr_info("0x%p: 0x%p ulen: %d, uh2->len: %d\n", skb, p, ulen, ntohs(uh2->len));
+        }
+
+        return pp;
+    }
+
+    /* mismatch, but we never need to flush */
+    return NULL;
+}
+
+%}
+
+function stap_udp_gro_receive_segment(head:long, skb:long) %{
+    struct list_head *head = (struct list_head *)STAP_ARG_head;
+    struct sk_buff *skb = (struct sk_buff *)STAP_ARG_skb;
+
+    udp_gro_receive_segment(head, skb);
+%}
+
+probe kernel.function("udp_gro_receive_segment") {
+    stap_udp_gro_receive_segment($head, $skb);
+}
+
+function stap_udp_gro_receive(skb:long, uh:long) %{
+    struct sk_buff *skb = (struct sk_buff *)STAP_ARG_skb;
+    struct udphdr *uh = (struct udphdr *)STAP_ARG_uh;
+
+    pr_info("0x%p: ulen %d\n", skb, ntohs(uh->len));
+%}
+
+probe kernel.function("udp_gro_receive") {
+    stap_udp_gro_receive($skb, $uh);
+}
