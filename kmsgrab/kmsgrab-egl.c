@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <string.h>
 
 #define EGL_EGLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES
@@ -30,7 +32,6 @@ drmModeFBPtr get_fb(const int drm_fd)
     drmModeResPtr res;
     drmModeCrtcPtr crtc;
     drmModeFBPtr fb;
-    int fb_dmafd = 0;
 
     drmSetClientCap(drm_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1);
     res = drmModeGetResources(drm_fd);
@@ -45,8 +46,6 @@ drmModeFBPtr get_fb(const int drm_fd)
         if(fb)
             break;
     }
-
-    drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
     drmModeFreeResources(res);
 
     return fb;
@@ -133,10 +132,13 @@ int main(int argc, char const *argv[])
     };
 
     drm_fd = open(DRI_DEVICE_NODE, O_RDWR | FD_CLOEXEC);
+    // needs CAP_SYS_ADMIN to get fd from handle, see drm_mode_getfb
     fb = get_fb(drm_fd);
-    drmPrimeHandleToFD(drm_fd, fb->handle, O_RDONLY, &fb_dmafd);
+    if (!fb) {
+        fprintf(stderr, "no fb available\n");
+        exit(1);
+    }
     fprintf(stderr, "drm framebuffer export dmabuf as fd %d\n", fb_dmafd);
-
 
     gbm = gbm_create_device(drm_fd);
     egl_display = eglGetPlatformDisplay(EGL_PLATFORM_GBM_KHR, gbm, NULL);
