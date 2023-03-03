@@ -7,4 +7,8 @@ cmake-build-debug/
 *.mod.c
 modules.order
 Module.symvers
-
+build-*-Debug/
+build-*-Release/
+build-*-MinSizeRel/
+build-*-RelWithDebInfo/
+build-*-Profile/
