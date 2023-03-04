@@ -38,6 +38,7 @@ Dialog::Dialog(QWidget *parent)
     QRegExp ipRegex (ipRange);
     QRegExpValidator *ipValidator = new QRegExpValidator(ipRegex, this);
     ui->ipEdit->setValidator(ipValidator);
+    ui->ipEdit->setText("192.168.10.101");
 
     QValidator *validator = new QIntValidator(1, 65535, this);
     ui->portEdit->setValidator(validator);
@@ -191,12 +192,8 @@ void Dialog::slot1()
 
     r = write_wait(fd, 1000);
     if (r < 0) {
-        if (r != -ETIMEDOUT) {
-            QString info = QString("connect failed: %1").arg(strerror(-r));
-            QMessageBox::warning(NULL, "Warning", info);
-            return;
-        }
-        QMessageBox::warning(NULL, "Warning", "connect timeout");
+        QString info = QString("connect failed: %1").arg(strerror(-r));
+        QMessageBox::warning(NULL, "Warning", info);
         return;
     }
 
@@ -211,12 +208,8 @@ void Dialog::slot1()
 
     r = read_wait(fd, 1000);
     if (r < 0) {
-        if (r != -ETIMEDOUT) {
-            QString info = QString("recv failed: %1").arg(strerror(-r));
-            QMessageBox::warning(NULL, "Warning", info);
-            return;
-        }
-        QMessageBox::warning(NULL, "Warning", "recv timeout");
+        QString info = QString("recv failed: %1").arg(strerror(-r));
+        QMessageBox::warning(NULL, "Warning", info);
         return;
     }
 
@@ -244,10 +237,11 @@ void Dialog::slot1()
     // update ui
     ui->tickBtn->setText(QString::fromStdString(text + " ms"));
 
-    QColor col = QColor(Qt::red);
+    static int c = 0;
+    Qt::GlobalColor colors[2] = { Qt::green, Qt::red };
+    QColor col = QColor(colors[c++ % 2]);
     QString qss = QString(rqss).arg(col.name());
     ui->tickBtn->setStyleSheet(qss);
-    ui->tickBtn->setDisabled(true);
 }
 
 void Dialog::slot2() {

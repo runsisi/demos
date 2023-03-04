@@ -67,7 +67,7 @@
     <item row="1" column="4">
      <widget class="QPushButton" name="pushButton">
       <property name="text">
-       <string>重新开始</string>
+       <string>测试</string>
       </property>
      </widget>
     </item>
@@ -119,7 +119,7 @@
    <sender>pushButton</sender>
    <signal>clicked()</signal>
    <receiver>Dialog</receiver>
-   <slot>slot2()</slot>
+   <slot>slot1()</slot>
    <hints>
     <hint type="sourcelabel">
      <x>399</x>
