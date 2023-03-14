@@ -21,6 +21,8 @@ int main() {
         exit(1);
     }
 
+
+
     gbm_device_destroy(gbm);
     close(fd);
 }

@@ -2,13 +2,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <unistd.h>
 #include <xf86drm.h>
+#include <xf86drmMode.h>
 
 using namespace std;
 
 const char *dev = "/dev/dri/card0";
 
 int main() {
+    int err = 0;
     int fd = open(dev, O_RDONLY);
     if (fd < 0) {
         int err = errno;
@@ -23,5 +26,16 @@ int main() {
         drmFreeVersion(v);
     }
 
+    drmModePlaneRes *res = drmModeGetPlaneResources(fd);
+    if (!res) {
+        err = errno;
+        fprintf(stderr, "drmModeGetPlaneResources failed: %s\n", strerror(err));
+        exit(1);
+    }
+
+    printf("planes count: %d\n", res->count_planes);
+
+    drmModeFreePlaneResources(res);
+    close(fd);
     return 0;
 }
