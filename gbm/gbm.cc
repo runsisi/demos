@@ -23,29 +23,6 @@ int main() {
         exit(1);
     }
 
-    drmModePlaneRes *res = drmModeGetPlaneResources(fd);
-    if (!res) {
-        err = errno;
-        fprintf(stderr, "drmModeGetPlaneResources failed: %s\n", strerror(err));
-        exit(1);
-    }
-
-    for (int i = 0; i < res->count_planes; i++) {
-        drmModePlane *plane = drmModeGetPlane(fd, res->planes[i]);
-        if (!plane) {
-            err = errno;
-            fprintf(stderr, "drmModeGetPlane failed: %s\n", strerror(err));
-            continue;
-        }
-
-        if (plane->fb_id == 0) {
-            drmModeFreePlane(plane);
-            continue;
-        }
-    }
-
-    gbm_bo_import(gbm, GBM_BO_IMPORT_FD, NULL, 0);
-
     gbm_device_destroy(gbm);
     drmModeFreePlaneResources(res);
     close(fd);

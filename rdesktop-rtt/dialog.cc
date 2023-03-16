@@ -239,7 +239,7 @@ void Dialog::slot1()
 
     static int c = 0;
     Qt::GlobalColor colors[2] = { Qt::green, Qt::red };
-    QColor col = QColor(colors[c++ % 2]);
+    QColor col = QColor(colors[++c % 2]);
     QString qss = QString(rqss).arg(col.name());
     ui->tickBtn->setStyleSheet(qss);
 }
