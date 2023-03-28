@@ -12,3 +12,5 @@ build-*-Release/
 build-*-MinSizeRel/
 build-*-RelWithDebInfo/
 build-*-Profile/
+build/
+
