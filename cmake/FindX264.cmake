@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.12)
 
 # put following two lines in master CMakeLists.txt to enable local search:
 # cmake_policy(SET CMP0074 NEW)
-# set(OPENH264_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/x264)
+# set(X264_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/x264)
 
 find_path(
     X264_INCLUDE_DIR
