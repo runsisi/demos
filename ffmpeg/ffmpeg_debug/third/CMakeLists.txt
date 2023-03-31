@@ -1,0 +1,10 @@
+add_library(
+    nanobench
+    STATIC
+    nanobench.cc
+)
+target_include_directories(
+    nanobench
+    PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}
+)
