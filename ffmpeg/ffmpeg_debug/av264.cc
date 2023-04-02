@@ -21,7 +21,7 @@ extern "C" {
 namespace bench = ankerl::nanobench;
 
 int running = 1000;
-int64_t pts = 0;
+int64_t next_pts = 0;
 
 int main() {
     bench::Bench bench;
@@ -68,6 +68,9 @@ int main() {
         exit(1);
     }
 
+    // decode_simple_internal will set time_base from framerate
+    decoder->framerate = AVRational{60, 1};
+
     r = avcodec_parameters_to_context(decoder, ist->codecpar);
     if (r < 0) {
         fprintf(stderr, "avcodec_parameters_to_context failed: %d\n", r);
@@ -111,6 +114,7 @@ int main() {
         exit(1);
     }
 
+    ost->time_base = ist->time_base;
     ost->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     ost->codecpar->codec_id = enc->id;
 
@@ -190,7 +194,7 @@ int main() {
                 break;
             }
 
-            decoded_frame->pts = pts++;
+            decoded_frame->pts = next_pts++;
 
             // filter graph init & encoder finalize & output finalize
 
@@ -226,6 +230,7 @@ int main() {
                     exit(1);
                 }
 
+                params->time_base = decoder->time_base;
                 params->format = decoded_frame->format;
                 params->width = decoded_frame->width;
                 params->height = decoded_frame->height;
@@ -290,9 +295,7 @@ int main() {
 
                 // encoder finalize
 
-                encoder->time_base = (AVRational){1, 60};
-                encoder->framerate = (AVRational){60, 1};
-
+                encoder->time_base = av_buffersink_get_time_base(filter_out);
                 encoder->width = av_buffersink_get_w(filter_out);
                 encoder->height = av_buffersink_get_h(filter_out);
                 encoder->pix_fmt = (AVPixelFormat)av_buffersink_get_format(filter_out);
@@ -318,8 +321,6 @@ int main() {
                     fprintf(stderr, "avcodec_parameters_from_context failed: %d\n", r);
                     exit(1);
                 }
-
-                ost->time_base = av_add_q(encoder->time_base, (AVRational){0, 1});
 
                 // output finalize
 
@@ -348,7 +349,8 @@ int main() {
 
             // encode
 
-            filtered_frame->pts = pts;
+            AVRational filter_tb = av_buffersink_get_time_base(filter_out);
+            filtered_frame->pts = av_rescale_q(filtered_frame->pts, filter_tb, encoder->time_base);
 
             r = avcodec_send_frame(encoder, filtered_frame);
             if (r < 0) {
@@ -383,6 +385,9 @@ int main() {
                 fflush(stdout);
 
                 // output
+
+                av_packet_rescale_ts(encoded_pkt, encoder->time_base, ost->time_base);
+
                 r = av_interleaved_write_frame(ofctx, encoded_pkt);
                 if (r < 0) {
                     fprintf(stderr, "av_interleaved_write_frame failed: %d", r);
