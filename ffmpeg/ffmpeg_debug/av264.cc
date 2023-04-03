@@ -280,7 +280,7 @@ int main() {
 
                 r = avfilter_graph_parse(filter_graph,
                     "hwmap=mode=direct:derive_device=vaapi"
-                    ",scale_vaapi=format=nv12:mode=fast",
+                    ",scale_vaapi=format=nv12:mode=fast:extra_hw_frames=-1",
                     outputs, inputs, NULL);
                 if (r < 0) {
                     fprintf(stderr, "avfilter_graph_parse failed: %d\n", r);
@@ -306,7 +306,7 @@ int main() {
                 av_dict_set_int(&encoder_opts, "g", 60, 0);
                 // 920 does not support B-frames
                 av_dict_set_int(&encoder_opts, "bf", 0, 0);
-                av_dict_set_int(&encoder_opts, "async_depth", 11, 0);
+                av_dict_set_int(&encoder_opts, "async_depth", 10, 0);
 
                 r = avcodec_open2(encoder, enc, &encoder_opts);
                 if (r < 0) {
