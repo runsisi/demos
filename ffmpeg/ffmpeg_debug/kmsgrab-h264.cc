@@ -28,7 +28,6 @@ namespace bench = ankerl::nanobench;
 
 int running = 1000;
 int64_t next_pts = 0;
-int64_t frame_last = 0;
 
 int main() {
   bench::Bench bench;
@@ -36,13 +35,9 @@ int main() {
   bench.epochs(running).epochIterations(1);
   bench::detail::IterationLogic epoch(bench);
 
-  av_log_set_level(AV_LOG_TRACE);
+  av_log_set_level(AV_LOG_INFO);
 
   int framerate = 60;
-
-  int64_t frame_delay = av_rescale_q(1, (AVRational) { 1, framerate }, AV_TIME_BASE_Q);
-
-  // filter
 
   // encoder
 
@@ -115,246 +110,250 @@ int main() {
   kmsgrab_ctx->format = AV_PIX_FMT_NONE;
   kmsgrab_ctx->drm_format_modifier = DRM_FORMAT_MOD_INVALID;
 
-  do {
-    r = kmsgrab_read_header(kmsgrab_ctx);
+  auto process = [&]() -> int {
+    int r = kmsgrab_read_header(kmsgrab_ctx);
     if (r < 0) {
       fprintf(stderr, "kmsgrab_read_header failed: %d\n", r);
-
-      kmsgrab_read_close(kmsgrab_ctx);
+      return r;
     }
-  } while (r < 0);
 
-  // init filter
+    // init filter
 
-  filter_graph = avfilter_graph_alloc();
-  if (!filter_graph) {
-    fprintf(stderr, "avfilter_graph_alloc failed\n");
-    exit(1);
-  }
-
-  // buffersrc
-
-  r = avfilter_graph_create_filter(&filter_in,
-    avfilter_get_by_name("buffer"), "in",
-    "width=1:height=1:pix_fmt=drm_prime:time_base=1/1", NULL,
-    filter_graph);
-  if (r < 0) {
-    fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
-    exit(1);
-  }
-
-  AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
-  if (!params) {
-    fprintf(stderr, "av_buffersrc_parameters_alloc failed\n");
-    exit(1);
-  }
-
-  params->time_base = AVRational{1, framerate};
-  params->width = kmsgrab_ctx->width;
-  params->height = kmsgrab_ctx->height;
-  params->hw_frames_ctx = kmsgrab_ctx->frames_ref;
-
-  r = av_buffersrc_parameters_set(filter_in, params);
-  if (r < 0) {
-    fprintf(stderr, "av_buffersrc_parameters_set failed: %d\n", r);
-    exit(1);
-  }
-
-  av_free(params);
-
-  // buffersink
-
-  r = avfilter_graph_create_filter(&filter_out,
-    avfilter_get_by_name("buffersink"), "out", NULL,
-    NULL, filter_graph);
-  if (r < 0) {
-    fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
-    exit(1);
-  }
-
-  // filter config
-
-  AVFilterInOut *inputs = avfilter_inout_alloc();
-  if (!inputs) {
-    fprintf(stderr, "avfilter_inout_alloc failed\n");
-    exit(1);
-  }
-
-  inputs->name = av_strdup("in");
-  inputs->filter_ctx = filter_in;
-  inputs->pad_idx = 0;
-  inputs->next = NULL;
-
-  AVFilterInOut *outputs = avfilter_inout_alloc();
-  if (!outputs) {
-    fprintf(stderr, "avfilter_inout_alloc failed\n");
-    exit(1);
-  }
-
-  outputs->name = av_strdup("out");
-  outputs->filter_ctx = filter_out;
-  outputs->pad_idx = 0;
-  outputs->next = NULL;
-
-  r = avfilter_graph_parse(filter_graph,
-    "hwmap=mode=direct:derive_device=vaapi"
-    ",scale_vaapi=format=nv12:mode=fast:extra_hw_frames=-1",
-    outputs, inputs, NULL);
-  if (r < 0) {
-    fprintf(stderr, "avfilter_graph_parse failed: %d\n", r);
-    exit(1);
-  }
-
-  r = avfilter_graph_config(filter_graph, NULL);
-  if (r < 0) {
-    fprintf(stderr, "avfilter_graph_config failed: %d\n", r);
-    exit(1);
-  }
-
-  // encoder finalize
-
-  encoder->time_base = av_buffersink_get_time_base(filter_out);
-  encoder->width = av_buffersink_get_w(filter_out);
-  encoder->height = av_buffersink_get_h(filter_out);
-  encoder->pix_fmt = (AVPixelFormat)av_buffersink_get_format(filter_out);
-  encoder->hw_frames_ctx = av_buffer_ref(av_buffersink_get_hw_frames_ctx(filter_out));
-
-  AVDictionary *encoder_opts = NULL;
-  av_dict_set_int(&encoder_opts, "profile", FF_PROFILE_H264_CONSTRAINED_BASELINE, 0);
-  av_dict_set_int(&encoder_opts, "g", 60, 0);
-  // 920 does not support B-frames
-  av_dict_set_int(&encoder_opts, "bf", 0, 0);
-  av_dict_set_int(&encoder_opts, "async_depth", 1, 0);
-
-  r = avcodec_open2(encoder, enc, &encoder_opts);
-  if (r < 0) {
-    fprintf(stderr, "avcodec_open2 failed: %d\n", r);
-    exit(1);
-  }
-
-  av_dict_free(&encoder_opts);
-
-  r = avcodec_parameters_from_context(ost->codecpar, encoder);
-  if (r < 0) {
-    fprintf(stderr, "avcodec_parameters_from_context failed: %d\n", r);
-    exit(1);
-  }
-
-  // output finalize
-
-  r = avformat_write_header(ofctx, NULL);
-  if (r < 0) {
-    fprintf(stderr, "avformat_write_header failed: %d\n", r);
-    exit(1);
-  }
-
-  while (running--) {
-
-    // get input pkt
-
-    printf("<");
-    fflush(stdout);
-
-    int64_t now = av_gettime_relative();
-    if (frame_last) {
-      int64_t delay;
-      while (1) {
-        delay = frame_last + frame_delay - now;
-        if (delay <= 0)
-          break;
-        av_usleep(delay);
-        now = av_gettime_relative();
-      }
+    filter_graph = avfilter_graph_alloc();
+    if (!filter_graph) {
+      fprintf(stderr, "avfilter_graph_alloc failed\n");
+      return AVERROR(ENOMEM);
     }
-    frame_last = now;
 
-    do {
-      r = kmsgrab_read_frame(kmsgrab_ctx, decoded_frame);
-      if (r < 0) {
-        kmsgrab_read_close(kmsgrab_ctx);
-        kmsgrab_read_header(kmsgrab_ctx);
-        continue;
-      }
-    } while (r < 0);
+    // buffersrc
 
-    auto &pc = bench::detail::performanceCounters();
-    pc.beginMeasure();
-    bench::Clock::time_point const before = bench::Clock::now();
-
-    decoded_frame->pts = next_pts++;
-
-    // filter in
-
-    r = av_buffersrc_add_frame_flags(filter_in, decoded_frame, 0);
+    r = avfilter_graph_create_filter(&filter_in,
+      avfilter_get_by_name("buffer"), "in",
+      "width=1:height=1:pix_fmt=drm_prime:time_base=1/1", NULL,
+      filter_graph);
     if (r < 0) {
-      fprintf(stderr, "av_buffersrc_add_frame_flags failed: %d\n", r);
-      exit(1);
+      fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
+      return r;
     }
 
-    // filter out
+    AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
+    if (!params) {
+      fprintf(stderr, "av_buffersrc_parameters_alloc failed\n");
+      return AVERROR(ENOMEM);
+    }
 
-    r = av_buffersink_get_frame(filter_out, filtered_frame);
+    params->time_base = AVRational{1, framerate};
+    params->width = kmsgrab_ctx->width;
+    params->height = kmsgrab_ctx->height;
+    params->hw_frames_ctx = kmsgrab_ctx->frames_ref;
+
+    r = av_buffersrc_parameters_set(filter_in, params);
     if (r < 0) {
-      fprintf(stderr, "av_buffersink_get_frame failed: %d\n", r);
-      exit(1);
+      fprintf(stderr, "av_buffersrc_parameters_set failed: %d\n", r);
+      return r;
     }
 
-    // encode
+    av_free(params);
 
-    AVRational filter_tb = av_buffersink_get_time_base(filter_out);
-    filtered_frame->pts = av_rescale_q(filtered_frame->pts, filter_tb, encoder->time_base);
+    // buffersink
 
-    r = avcodec_send_frame(encoder, filtered_frame);
+    r = avfilter_graph_create_filter(&filter_out,
+      avfilter_get_by_name("buffersink"), "out", NULL,
+      NULL, filter_graph);
     if (r < 0) {
-      fprintf(stderr, "avcodec_send_frame failed: %d\n", r);
-      exit(1);
+      fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
+      return r;
     }
 
-    while (1) {
-      r = avcodec_receive_packet(encoder, encoded_pkt);
-      if (r < 0) {
-        if (r != AVERROR(EAGAIN)) {
-          fprintf(stderr, "avcodec_receive_packet failed: %d", r);
-          exit(1);
-        }
+    // filter config
 
-        // if frame has been issued to vaapi by avcodec_send_frame then
-        // avcodec_receive_packet also returns EAGAIN
+    AVFilterInOut *inputs = avfilter_inout_alloc();
+    if (!inputs) {
+      fprintf(stderr, "avfilter_inout_alloc failed\n");
+      return AVERROR(ENOMEM);
+    }
 
-        printf(".");
-        fflush(stdout);
+    inputs->name = av_strdup("in");
+    inputs->filter_ctx = filter_in;
+    inputs->pad_idx = 0;
+    inputs->next = NULL;
 
-        break;
-      }
+    AVFilterInOut *outputs = avfilter_inout_alloc();
+    if (!outputs) {
+      fprintf(stderr, "avfilter_inout_alloc failed\n");
+      return AVERROR(ENOMEM);
+    }
 
-      bench::Clock::time_point const after = bench::Clock::now();
-      pc.endMeasure();
-      pc.updateResults(epoch.numIters());
-      // complete 1 epoch with 1 iteration, print result when all epochs completed
-      epoch.add(after - before, pc);
+    outputs->name = av_strdup("out");
+    outputs->filter_ctx = filter_out;
+    outputs->pad_idx = 0;
+    outputs->next = NULL;
 
-      printf("-");
+    r = avfilter_graph_parse(filter_graph,
+      "hwmap=mode=direct:derive_device=vaapi"
+      ",scale_vaapi=format=nv12:mode=fast:extra_hw_frames=-1",
+      outputs, inputs, NULL);
+    if (r < 0) {
+      fprintf(stderr, "avfilter_graph_parse failed: %d\n", r);
+      return r;
+    }
+
+    r = avfilter_graph_config(filter_graph, NULL);
+    if (r < 0) {
+      fprintf(stderr, "avfilter_graph_config failed: %d\n", r);
+      return r;
+    }
+
+    // encoder finalize
+
+    encoder->time_base = av_buffersink_get_time_base(filter_out);
+    encoder->width = av_buffersink_get_w(filter_out);
+    encoder->height = av_buffersink_get_h(filter_out);
+    encoder->pix_fmt = (AVPixelFormat) av_buffersink_get_format(filter_out);
+    encoder->hw_frames_ctx = av_buffer_ref(av_buffersink_get_hw_frames_ctx(filter_out));
+
+    AVDictionary *encoder_opts = NULL;
+    av_dict_set_int(&encoder_opts, "profile", FF_PROFILE_H264_CONSTRAINED_BASELINE, 0);
+    av_dict_set_int(&encoder_opts, "g", 60, 0);
+    // 920 does not support B-frames
+    av_dict_set_int(&encoder_opts, "bf", 0, 0);
+    av_dict_set_int(&encoder_opts, "async_depth", 1, 0);
+
+    r = avcodec_open2(encoder, enc, &encoder_opts);
+    if (r < 0) {
+      fprintf(stderr, "avcodec_open2 failed: %d\n", r);
+      return r;
+    }
+
+    av_dict_free(&encoder_opts);
+
+    r = avcodec_parameters_from_context(ost->codecpar, encoder);
+    if (r < 0) {
+      fprintf(stderr, "avcodec_parameters_from_context failed: %d\n", r);
+      return r;
+    }
+
+    // output finalize
+
+    r = avformat_write_header(ofctx, NULL);
+    if (r < 0) {
+      fprintf(stderr, "avformat_write_header failed: %d\n", r);
+      return r;
+    }
+
+    int64_t frame_delay = av_rescale_q(1, (AVRational) { 1, framerate }, AV_TIME_BASE_Q);
+
+    while (running--) {
+
+      // get input pkt
+
+      printf("<");
       fflush(stdout);
 
-      // output
+      int64_t now = av_gettime_relative();
+      if (kmsgrab_ctx->frame_last) {
+        int64_t delay;
+        while (1) {
+          delay = kmsgrab_ctx->frame_last + frame_delay - now;
+          if (delay <= 0)
+            break;
+          av_usleep(delay);
+          now = av_gettime_relative();
+        }
+      }
+      kmsgrab_ctx->frame_last = now;
 
-      av_packet_rescale_ts(encoded_pkt, encoder->time_base, ost->time_base);
-
-      r = av_interleaved_write_frame(ofctx, encoded_pkt);
+      r = kmsgrab_read_frame(kmsgrab_ctx, decoded_frame);
       if (r < 0) {
-        fprintf(stderr, "av_interleaved_write_frame failed: %d", r);
-        exit(1);
+        return r;
       }
 
-      av_packet_unref(encoded_pkt);
-    } // encode -> output
+      auto &pc = bench::detail::performanceCounters();
+      pc.beginMeasure();
+      bench::Clock::time_point const before = bench::Clock::now();
 
-    av_frame_unref(filtered_frame);
-    av_frame_unref(decoded_frame);
+      decoded_frame->pts = next_pts++;
 
-    printf(">");
-    fflush(stdout);
-  } // while (running)
+      // filter in
+
+      r = av_buffersrc_add_frame_flags(filter_in, decoded_frame, 0);
+      if (r < 0) {
+        fprintf(stderr, "av_buffersrc_add_frame_flags failed: %d\n", r);
+        return r;
+      }
+
+      // filter out
+
+      r = av_buffersink_get_frame(filter_out, filtered_frame);
+      if (r < 0) {
+        fprintf(stderr, "av_buffersink_get_frame failed: %d\n", r);
+        return r;
+      }
+
+      // encode
+
+      AVRational filter_tb = av_buffersink_get_time_base(filter_out);
+      filtered_frame->pts = av_rescale_q(filtered_frame->pts, filter_tb, encoder->time_base);
+
+      r = avcodec_send_frame(encoder, filtered_frame);
+      if (r < 0) {
+        fprintf(stderr, "avcodec_send_frame failed: %d\n", r);
+        return r;
+      }
+
+      while (1) {
+        r = avcodec_receive_packet(encoder, encoded_pkt);
+        if (r < 0) {
+          if (r != AVERROR(EAGAIN)) {
+            fprintf(stderr, "avcodec_receive_packet failed: %d", r);
+            return r;
+          }
+
+          // if frame has been issued to vaapi by avcodec_send_frame then
+          // avcodec_receive_packet also returns EAGAIN
+
+          printf(".");
+          fflush(stdout);
+
+          break;
+        }
+
+        bench::Clock::time_point const after = bench::Clock::now();
+        pc.endMeasure();
+        pc.updateResults(epoch.numIters());
+        // complete 1 epoch with 1 iteration, print result when all epochs completed
+        epoch.add(after - before, pc);
+
+        printf("-");
+        fflush(stdout);
+
+        // output
+
+        av_packet_rescale_ts(encoded_pkt, encoder->time_base, ost->time_base);
+
+        r = av_interleaved_write_frame(ofctx, encoded_pkt);
+        if (r < 0) {
+          fprintf(stderr, "av_interleaved_write_frame failed: %d", r);
+          return r;
+        }
+
+        av_packet_unref(encoded_pkt);
+      } // encode -> output
+
+      av_frame_unref(filtered_frame);
+      av_frame_unref(decoded_frame);
+
+      printf(">");
+      fflush(stdout);
+    } // while (running)
+
+    return r;
+  };
+
+  do {
+    r = process();
+    kmsgrab_read_close(kmsgrab_ctx);
+  } while (r == AVERROR(EIO));
 
   printf("\n");
 
