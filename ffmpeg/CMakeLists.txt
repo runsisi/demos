@@ -7,11 +7,13 @@ project(
 
 set(CMAKE_CXX_STANDARD 17)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/ffmpeg_debug/cmake")
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_SHARED_LIBRARY_SUFFIX})
 
 # change FFMPEG_ROOT to locate ffmpeg libraries
-set(FFMPEG_ROOT $ENV{HOME}/working/ubuntu/ffmpeg-5.1.2)
+set(FFMPEG_ROOT $ENV{HOME}/working/ubuntu/ffmpeg-5.1.1)
 find_package(FFmpeg REQUIRED)
 
 find_package(ZLIB REQUIRED)
@@ -32,7 +34,7 @@ pkg_check_modules(opus REQUIRED IMPORTED_TARGET opus)
 pkg_check_modules(ogg REQUIRED IMPORTED_TARGET ogg)
 pkg_check_modules(lame REQUIRED IMPORTED_TARGET lame)
 pkg_check_modules(vdpau REQUIRED IMPORTED_TARGET vdpau)
-pkg_check_modules(mpp REQUIRED IMPORTED_TARGET rockchip_mpp)
+#pkg_check_modules(mpp REQUIRED IMPORTED_TARGET rockchip_mpp)
 
 # create an interface library to make --start-group, --end-group work!!!
 add_library(ffmpeg_depends INTERFACE IMPORTED)
@@ -56,7 +58,7 @@ target_link_libraries(
     BZip2::BZip2
     LibLZMA::LibLZMA
     SDL2::SDL2
-    PkgConfig::mpp
+#    PkgConfig::mpp
     -Wl,--end-group
 )
 

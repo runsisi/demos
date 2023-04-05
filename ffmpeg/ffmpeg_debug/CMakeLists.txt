@@ -33,3 +33,17 @@ target_link_libraries(
     ${FFMPEG_LIBRARIES}
     ffmpeg_depends
 )
+
+add_executable(
+    kmsgrab-h264
+    kmsgrab-h264.cc
+    kmsgrab.cxx
+)
+target_compile_definitions(kmsgrab-h264 PRIVATE HAVE_LIBDRM_GETFB2)
+target_link_libraries(
+    kmsgrab-h264
+    PRIVATE
+    FFmpeg::FFmpeg
+    nanobench
+    ffmpeg_depends
+)
