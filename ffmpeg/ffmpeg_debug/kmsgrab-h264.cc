@@ -36,11 +36,13 @@ int main() {
   bench.epochs(running).epochIterations(1);
   bench::detail::IterationLogic epoch(bench);
 
-  av_log_set_level(AV_LOG_ERROR);
+  av_log_set_level(AV_LOG_TRACE);
 
   int framerate = 60;
 
   int64_t frame_delay = av_rescale_q(1, (AVRational) { 1, framerate }, AV_TIME_BASE_Q);
+
+  // filter
 
   // encoder
 
@@ -107,20 +109,144 @@ int main() {
     exit(1);
   }
 
-  KMSGrabContext kmsgrab_ctx;
-  memset(&kmsgrab_ctx, 0, sizeof(kmsgrab_ctx));
-  kmsgrab_ctx.device_path = "/dev/dri/card0";
-  kmsgrab_ctx.format = AV_PIX_FMT_NONE;
-  kmsgrab_ctx.drm_format_modifier = DRM_FORMAT_MOD_INVALID;
+  KMSGrabContext _kmsgrab_ctx, *kmsgrab_ctx = &_kmsgrab_ctx;
+  memset(kmsgrab_ctx, 0, sizeof(*kmsgrab_ctx));
+  kmsgrab_ctx->device_path = "/dev/dri/card0";
+  kmsgrab_ctx->format = AV_PIX_FMT_NONE;
+  kmsgrab_ctx->drm_format_modifier = DRM_FORMAT_MOD_INVALID;
 
   do {
-    r = kmsgrab_read_header(&kmsgrab_ctx);
+    r = kmsgrab_read_header(kmsgrab_ctx);
     if (r < 0) {
       fprintf(stderr, "kmsgrab_read_header failed: %d\n", r);
 
-      kmsgrab_read_close(&kmsgrab_ctx);
+      kmsgrab_read_close(kmsgrab_ctx);
     }
   } while (r < 0);
+
+  // init filter
+
+  filter_graph = avfilter_graph_alloc();
+  if (!filter_graph) {
+    fprintf(stderr, "avfilter_graph_alloc failed\n");
+    exit(1);
+  }
+
+  // buffersrc
+
+  r = avfilter_graph_create_filter(&filter_in,
+    avfilter_get_by_name("buffer"), "in",
+    "width=1:height=1:pix_fmt=drm_prime:time_base=1/1", NULL,
+    filter_graph);
+  if (r < 0) {
+    fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
+    exit(1);
+  }
+
+  AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
+  if (!params) {
+    fprintf(stderr, "av_buffersrc_parameters_alloc failed\n");
+    exit(1);
+  }
+
+  params->time_base = AVRational{1, framerate};
+  params->width = kmsgrab_ctx->width;
+  params->height = kmsgrab_ctx->height;
+  params->hw_frames_ctx = kmsgrab_ctx->frames_ref;
+
+  r = av_buffersrc_parameters_set(filter_in, params);
+  if (r < 0) {
+    fprintf(stderr, "av_buffersrc_parameters_set failed: %d\n", r);
+    exit(1);
+  }
+
+  av_free(params);
+
+  // buffersink
+
+  r = avfilter_graph_create_filter(&filter_out,
+    avfilter_get_by_name("buffersink"), "out", NULL,
+    NULL, filter_graph);
+  if (r < 0) {
+    fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
+    exit(1);
+  }
+
+  // filter config
+
+  AVFilterInOut *inputs = avfilter_inout_alloc();
+  if (!inputs) {
+    fprintf(stderr, "avfilter_inout_alloc failed\n");
+    exit(1);
+  }
+
+  inputs->name = av_strdup("in");
+  inputs->filter_ctx = filter_in;
+  inputs->pad_idx = 0;
+  inputs->next = NULL;
+
+  AVFilterInOut *outputs = avfilter_inout_alloc();
+  if (!outputs) {
+    fprintf(stderr, "avfilter_inout_alloc failed\n");
+    exit(1);
+  }
+
+  outputs->name = av_strdup("out");
+  outputs->filter_ctx = filter_out;
+  outputs->pad_idx = 0;
+  outputs->next = NULL;
+
+  r = avfilter_graph_parse(filter_graph,
+    "hwmap=mode=direct:derive_device=vaapi"
+    ",scale_vaapi=format=nv12:mode=fast:extra_hw_frames=-1",
+    outputs, inputs, NULL);
+  if (r < 0) {
+    fprintf(stderr, "avfilter_graph_parse failed: %d\n", r);
+    exit(1);
+  }
+
+  r = avfilter_graph_config(filter_graph, NULL);
+  if (r < 0) {
+    fprintf(stderr, "avfilter_graph_config failed: %d\n", r);
+    exit(1);
+  }
+
+  // encoder finalize
+
+  encoder->time_base = av_buffersink_get_time_base(filter_out);
+  encoder->width = av_buffersink_get_w(filter_out);
+  encoder->height = av_buffersink_get_h(filter_out);
+  encoder->pix_fmt = (AVPixelFormat)av_buffersink_get_format(filter_out);
+  encoder->hw_frames_ctx = av_buffer_ref(av_buffersink_get_hw_frames_ctx(filter_out));
+
+  AVDictionary *encoder_opts = NULL;
+  av_dict_set_int(&encoder_opts, "profile", FF_PROFILE_H264_CONSTRAINED_BASELINE, 0);
+  av_dict_set_int(&encoder_opts, "g", 60, 0);
+  // 920 does not support B-frames
+  av_dict_set_int(&encoder_opts, "bf", 0, 0);
+  av_dict_set_int(&encoder_opts, "async_depth", 1, 0);
+
+  r = avcodec_open2(encoder, enc, &encoder_opts);
+  if (r < 0) {
+    fprintf(stderr, "avcodec_open2 failed: %d\n", r);
+    exit(1);
+  }
+
+  av_dict_free(&encoder_opts);
+
+  r = avcodec_parameters_from_context(ost->codecpar, encoder);
+  if (r < 0) {
+    fprintf(stderr, "avcodec_parameters_from_context failed: %d\n", r);
+    exit(1);
+  }
+
+  // output finalize
+
+  r = avformat_write_header(ofctx, NULL);
+  if (r < 0) {
+    fprintf(stderr, "avformat_write_header failed: %d\n", r);
+    exit(1);
+  }
 
   while (running--) {
 
@@ -143,10 +269,10 @@ int main() {
     frame_last = now;
 
     do {
-      r = kmsgrab_read_frame(&kmsgrab_ctx, decoded_frame);
+      r = kmsgrab_read_frame(kmsgrab_ctx, decoded_frame);
       if (r < 0) {
-        kmsgrab_read_close(&kmsgrab_ctx);
-        kmsgrab_read_header(&kmsgrab_ctx);
+        kmsgrab_read_close(kmsgrab_ctx);
+        kmsgrab_read_header(kmsgrab_ctx);
         continue;
       }
     } while (r < 0);
@@ -156,141 +282,6 @@ int main() {
     bench::Clock::time_point const before = bench::Clock::now();
 
     decoded_frame->pts = next_pts++;
-
-    // filter graph init & encoder finalize & output finalize
-
-    if (!filter_graph) {
-      if (decoded_frame->hw_frames_ctx) {
-        hw_frames_ref = av_buffer_ref(decoded_frame->hw_frames_ctx);
-        if (!hw_frames_ref) {
-          fprintf(stderr, "av_buffer_ref failed\n");
-          exit(1);
-        }
-      }
-
-      filter_graph = avfilter_graph_alloc();
-      if (!filter_graph) {
-        fprintf(stderr, "avfilter_graph_alloc failed\n");
-        exit(1);
-      }
-
-      // buffersrc
-
-      r = avfilter_graph_create_filter(&filter_in,
-        avfilter_get_by_name("buffer"), "in",
-        "width=1:height=1:pix_fmt=drm_prime:time_base=1/1", NULL,
-        filter_graph);
-      if (r < 0) {
-        fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
-        exit(1);
-      }
-
-      AVBufferSrcParameters *params = av_buffersrc_parameters_alloc();
-      if (!params) {
-        fprintf(stderr, "av_buffersrc_parameters_alloc failed\n");
-        exit(1);
-      }
-
-      params->time_base = AVRational{1, framerate};
-      params->format = decoded_frame->format;
-      params->width = decoded_frame->width;
-      params->height = decoded_frame->height;
-      params->hw_frames_ctx = hw_frames_ref;
-
-      r = av_buffersrc_parameters_set(filter_in, params);
-      if (r < 0) {
-        fprintf(stderr, "av_buffersrc_parameters_set failed: %d\n", r);
-        exit(1);
-      }
-
-      av_free(params);
-
-      // buffersink
-
-      r = avfilter_graph_create_filter(&filter_out,
-        avfilter_get_by_name("buffersink"), "out", NULL,
-        NULL, filter_graph);
-      if (r < 0) {
-        fprintf(stderr, "avfilter_graph_create_filter failed: %d\n", r);
-        exit(1);
-      }
-
-      // filter config
-
-      AVFilterInOut *inputs = avfilter_inout_alloc();
-      if (!inputs) {
-        fprintf(stderr, "avfilter_inout_alloc failed\n");
-        exit(1);
-      }
-
-      inputs->name = av_strdup("in");
-      inputs->filter_ctx = filter_in;
-      inputs->pad_idx = 0;
-      inputs->next = NULL;
-
-      AVFilterInOut *outputs = avfilter_inout_alloc();
-      if (!outputs) {
-        fprintf(stderr, "avfilter_inout_alloc failed\n");
-        exit(1);
-      }
-
-      outputs->name = av_strdup("out");
-      outputs->filter_ctx = filter_out;
-      outputs->pad_idx = 0;
-      outputs->next = NULL;
-
-      r = avfilter_graph_parse(filter_graph,
-        "hwmap=mode=direct:derive_device=vaapi"
-        ",scale_vaapi=format=nv12:mode=fast:extra_hw_frames=-1",
-        outputs, inputs, NULL);
-      if (r < 0) {
-        fprintf(stderr, "avfilter_graph_parse failed: %d\n", r);
-        exit(1);
-      }
-
-      r = avfilter_graph_config(filter_graph, NULL);
-      if (r < 0) {
-        fprintf(stderr, "avfilter_graph_config failed: %d\n", r);
-        exit(1);
-      }
-
-      // encoder finalize
-
-      encoder->time_base = av_buffersink_get_time_base(filter_out);
-      encoder->width = av_buffersink_get_w(filter_out);
-      encoder->height = av_buffersink_get_h(filter_out);
-      encoder->pix_fmt = (AVPixelFormat)av_buffersink_get_format(filter_out);
-      encoder->hw_frames_ctx = av_buffer_ref(av_buffersink_get_hw_frames_ctx(filter_out));
-
-      AVDictionary *encoder_opts = NULL;
-      av_dict_set_int(&encoder_opts, "profile", FF_PROFILE_H264_CONSTRAINED_BASELINE, 0);
-      av_dict_set_int(&encoder_opts, "g", 60, 0);
-      // 920 does not support B-frames
-      av_dict_set_int(&encoder_opts, "bf", 0, 0);
-      av_dict_set_int(&encoder_opts, "async_depth", 1, 0);
-
-      r = avcodec_open2(encoder, enc, &encoder_opts);
-      if (r < 0) {
-        fprintf(stderr, "avcodec_open2 failed: %d\n", r);
-        exit(1);
-      }
-
-      av_dict_free(&encoder_opts);
-
-      r = avcodec_parameters_from_context(ost->codecpar, encoder);
-      if (r < 0) {
-        fprintf(stderr, "avcodec_parameters_from_context failed: %d\n", r);
-        exit(1);
-      }
-
-      // output finalize
-
-      r = avformat_write_header(ofctx, NULL);
-      if (r < 0) {
-        fprintf(stderr, "avformat_write_header failed: %d\n", r);
-        exit(1);
-      }
-    }
 
     // filter in
 
