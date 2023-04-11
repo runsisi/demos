@@ -15,4 +15,5 @@ add_subdirectory(gbm)
 add_subdirectory(rdesktop-rtt)
 add_subdirectory(QCustomPlot)
 add_subdirectory(x11)
-add_subdirectory(ffmpeg)
+# needs local FFmpeg build
+#add_subdirectory(ffmpeg)
