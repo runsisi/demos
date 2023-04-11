@@ -211,6 +211,8 @@ int main() {
         valid_sw_formats[j] = AV_PIX_FMT_NONE;
     }
 
+    printf("sw formats:\n");
+
     bool comma = false;
     for (int i = 0; ; i++) {
         if (valid_sw_formats[i] == AV_PIX_FMT_NONE) {
@@ -233,9 +235,49 @@ int main() {
         printf("\n");
     }
 
+    free(attr_list);
+
+    int image_count = vaMaxNumImageFormats(dpy);
+    if (image_count <= 0) {
+      fprintf(stderr, "vaMaxNumImageFormats failed\n");
+      exit(1);
+    }
+
+    VAImageFormat *image_list = (VAImageFormat *)malloc(image_count * sizeof(*image_list));
+    r = vaQueryImageFormats(dpy, image_list, &image_count);
+    if (r != VA_STATUS_SUCCESS) {
+        fprintf(stderr, "vaQueryImageFormats failed: %s\n", vaErrorStr(r));
+        exit(1);
+    }
+
+    printf("va image formats:\n");
+
+    comma = false;
+    for (int i = 0; i < image_count; i++) {
+        fourcc = image_list[i].fourcc;
+        pix_fmt = vaapi_pix_fmt_from_fourcc(fourcc);
+        if (pix_fmt == AV_PIX_FMT_NONE) {
+            continue;
+        }
+
+        if (comma) {
+            printf(", ");
+        } else {
+            comma = true;
+        }
+
+        printf("%s", av_get_pix_fmt_name(pix_fmt));
+    }
+
+    if (comma) {
+        printf("\n");
+    }
+
+    free(image_list);
+
     vaDestroyConfig(dpy, config_id);
     vaTerminate(dpy);
-    free(attr_list);
+
     close(fd);
     return 0;
 }

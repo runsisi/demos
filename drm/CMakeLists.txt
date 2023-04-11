@@ -35,3 +35,13 @@ target_link_libraries(
     PkgConfig::va
     PkgConfig::ffmpeg
 )
+
+add_executable(
+  transfer-pixfmt
+  transfer_pixfmt.cc
+)
+target_link_libraries(
+  transfer-pixfmt
+  PRIVATE
+  PkgConfig::ffmpeg
+)
