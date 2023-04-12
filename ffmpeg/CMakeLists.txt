@@ -16,6 +16,13 @@ option(WITH_SYSTEM_FFMPEG "Build with system ffmpeg" ON)
 if(NOT WITH_SYSTEM_FFMPEG)
     # change FFMPEG_ROOT to locate ffmpeg libraries
     set(FFMPEG_ROOT "$ENV{HOME}/working/ubuntu/ffmpeg-5.1.1" CACHE STRING "FFmpeg build root")
+
+    if(CMAKE_COMPILER_IS_GNUCXX)
+        set(static_linker_flags "-static-libstdc++ -static-libgcc")
+        set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${static_linker_flags}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${static_linker_flags}")
+        unset(static_linker_flags)
+    endif()
 endif()
 
 find_package(PkgConfig REQUIRED)
@@ -27,8 +34,6 @@ pkg_check_modules(va REQUIRED IMPORTED_TARGET libva libva-drm libva-x11 libva-wa
 if(WITH_SYSTEM_FFMPEG)
 
     find_package(PkgConfig REQUIRED)
-    # reset to default
-    set(CMAKE_FIND_LIBRARY_SUFFIXES ".so" ".a")
     pkg_check_modules(
         ffmpeg REQUIRED IMPORTED_TARGET
         libavdevice
@@ -59,7 +64,9 @@ else() # WITH_SYSTEM_FFMPEG
     pkg_check_modules(vdpau REQUIRED IMPORTED_TARGET vdpau)
     pkg_check_modules(mpp IMPORTED_TARGET rockchip_mpp)
 
+    # reset find order to link libm.so
     set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_STATIC_LIBRARY_SUFFIX})
+    # libc & libm should link dynamically
     find_library(m m REQUIRED)
 
     # create an interface library to make --start-group, --end-group work!!!
