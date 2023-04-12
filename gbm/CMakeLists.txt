@@ -7,9 +7,9 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm gbm)
 
-add_executable(gbm gbm.cc)
+add_executable(gbm-dev gbm.cc)
 target_link_libraries(
-    gbm
+    gbm-dev
     PRIVATE
     PkgConfig::drm
 )

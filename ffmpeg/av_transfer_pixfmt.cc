@@ -20,7 +20,9 @@ int main() {
     exit(1);
   }
   AVHWFramesContext *hwframes = (AVHWFramesContext *)hwframes_ref->data;
+  // must be AV_PIX_FMT_VAAPI, see av_hwframe_ctx_init
   hwframes->format = AV_PIX_FMT_VAAPI;
+  // must be set, see vaapi_frames_init
   hwframes->sw_format = AV_PIX_FMT_BGR0;
   hwframes->width = 1024;
   hwframes->height = 768;
