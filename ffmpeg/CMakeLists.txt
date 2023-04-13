@@ -2,18 +2,18 @@ cmake_minimum_required(VERSION 3.16)
 
 project(
     ffmpeg_debug
-    CXX
+    C CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
-set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_SHARED_LIBRARY_SUFFIX})
-
 option(WITH_SYSTEM_FFMPEG "Build with system ffmpeg" ON)
 if(NOT WITH_SYSTEM_FFMPEG)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_SHARED_LIBRARY_SUFFIX})
+
     # change FFMPEG_ROOT to locate ffmpeg libraries
     set(FFMPEG_ROOT "$ENV{HOME}/working/ubuntu/ffmpeg-5.1.1" CACHE STRING "FFmpeg build root")
 
@@ -30,6 +30,7 @@ pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
 pkg_check_modules(x11 REQUIRED IMPORTED_TARGET x11 xext xv xfixes xau xdmcp)
 pkg_check_modules(xcb REQUIRED IMPORTED_TARGET xcb xcb-shm xcb-xfixes xcb-shape)
 pkg_check_modules(va REQUIRED IMPORTED_TARGET libva libva-drm libva-x11 libva-wayland)
+find_package(Threads REQUIRED)
 
 if(WITH_SYSTEM_FFMPEG)
 
@@ -45,23 +46,42 @@ if(WITH_SYSTEM_FFMPEG)
         libavutil
     )
 
+    # reset find order to link libm.so
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_SHARED_LIBRARY_SUFFIX} ${CMAKE_STATIC_LIBRARY_SUFFIX})
+    # libc & libm should link dynamically
+    find_library(m m REQUIRED)
+
 else() # WITH_SYSTEM_FFMPEG
 
     find_package(FFmpeg REQUIRED)
+
+    foreach(i ${FFMPEG_LIBRARIES})
+        get_filename_component(i "${i}" DIRECTORY)
+        list(APPEND CMAKE_BUILD_RPATH ${i})
+    endforeach()
+
+    list(REMOVE_DUPLICATES CMAKE_BUILD_RPATH)
+
+    foreach(i ${CMAKE_BUILD_RPATH})
+        list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${i}" isSystemDir)
+        if(NOT "${isSystemDir}" STREQUAL "-1")
+            list(REMOVE_ITEM CMAKE_BUILD_RPATH ${i})
+        endif()
+    endforeach()
 
     find_package(ZLIB REQUIRED)
     find_package(BZip2 REQUIRED)
     find_package(LibLZMA REQUIRED)
     find_package(sdl2 REQUIRED CONFIG)
 
-    pkg_check_modules(alsa REQUIRED IMPORTED_TARGET alsa)
-    pkg_check_modules(sndio REQUIRED IMPORTED_TARGET sndio)
-    pkg_check_modules(pa REQUIRED IMPORTED_TARGET libpulse libpulse-mainloop-glib)
-    pkg_check_modules(vorbis REQUIRED IMPORTED_TARGET vorbis vorbisenc)
-    pkg_check_modules(opus REQUIRED IMPORTED_TARGET opus)
-    pkg_check_modules(ogg REQUIRED IMPORTED_TARGET ogg)
-    pkg_check_modules(lame REQUIRED IMPORTED_TARGET lame)
-    pkg_check_modules(vdpau REQUIRED IMPORTED_TARGET vdpau)
+    pkg_check_modules(alsa IMPORTED_TARGET alsa)
+    pkg_check_modules(sndio IMPORTED_TARGET sndio)
+    pkg_check_modules(pa IMPORTED_TARGET libpulse libpulse-mainloop-glib)
+    pkg_check_modules(vorbis IMPORTED_TARGET vorbis vorbisenc)
+    pkg_check_modules(opus IMPORTED_TARGET opus)
+    pkg_check_modules(ogg IMPORTED_TARGET ogg)
+    pkg_check_modules(lame IMPORTED_TARGET lame)
+    pkg_check_modules(vdpau IMPORTED_TARGET vdpau)
     pkg_check_modules(mpp IMPORTED_TARGET rockchip_mpp)
 
     # reset find order to link libm.so
@@ -75,25 +95,24 @@ else() # WITH_SYSTEM_FFMPEG
         deps
         PkgConfig::drm
         PkgConfig::va
-        PkgConfig::vdpau
-        PkgConfig::alsa
-        PkgConfig::sndio
-        PkgConfig::pa
-        PkgConfig::vorbis
-        PkgConfig::opus
-        PkgConfig::ogg
-        PkgConfig::lame
         PkgConfig::xcb
         PkgConfig::x11
         ZLIB::ZLIB
         BZip2::BZip2
         LibLZMA::LibLZMA
-        SDL2::SDL2
+        Threads::Threads
         ${m}
     )
-    if(mpp_FOUND)
-        list(APPEND deps PkgConfig::mpp)
+    if(TARGET SDL2::SDL2)
+        list(APPEND deps SDL2::SDL2)
+    else()
+        list(APPEND deps ${SDL2_LIBRARIES})
     endif()
+    foreach(i alsa sndio pa vorbis opus ogg lame vdpau mpp)
+        if(${i}_FOUND)
+            list(APPEND deps PkgConfig::${i})
+        endif()
+    endforeach()
 
     target_link_libraries(
         ffmpeg_depends
@@ -117,7 +136,16 @@ target_compile_definitions(
     PRIVATE
     __STDC_CONSTANT_MACROS
 )
-if(NOT WITH_SYSTEM_FFMPEG)
+if(WITH_SYSTEM_FFMPEG)
+    target_link_libraries(
+        av264
+        PRIVATE
+        PkgConfig::ffmpeg
+        nanobench
+        ${m}
+        Threads::Threads
+    )
+else()
     target_link_libraries(
         av264
         PRIVATE
@@ -125,20 +153,21 @@ if(NOT WITH_SYSTEM_FFMPEG)
         nanobench
         ffmpeg_depends
     )
-else()
-    target_link_libraries(
-        av264
-        PRIVATE
-        PkgConfig::ffmpeg
-        nanobench
-    )
 endif()
 
 add_executable(
     iterate_codec
     iterate_codec.cc
 )
-if(NOT WITH_SYSTEM_FFMPEG)
+if(WITH_SYSTEM_FFMPEG)
+    target_link_libraries(
+        iterate_codec
+        PRIVATE
+        PkgConfig::ffmpeg
+        ${m}
+        Threads::Threads
+    )
+else()
     target_include_directories(
         iterate_codec
         PRIVATE
@@ -149,12 +178,6 @@ if(NOT WITH_SYSTEM_FFMPEG)
         PRIVATE
         ${FFMPEG_LIBRARIES}
         ffmpeg_depends
-    )
-else()
-    target_link_libraries(
-        iterate_codec
-        PRIVATE
-        PkgConfig::ffmpeg
     )
 endif()
 
@@ -170,20 +193,22 @@ check_symbol_exists(drmModeGetFB2 "xf86drmMode.h" HAVE_LIBDRM_GETFB2)
 if(HAVE_LIBDRM_GETFB2)
     target_compile_definitions(kmsgrab-h264 PRIVATE HAVE_LIBDRM_GETFB2)
 endif()
-if(NOT WITH_SYSTEM_FFMPEG)
+if(WITH_SYSTEM_FFMPEG)
+    target_link_libraries(
+        kmsgrab-h264
+        PRIVATE
+        PkgConfig::ffmpeg
+        nanobench
+        ${m}
+        Threads::Threads
+    )
+else()
     target_link_libraries(
         kmsgrab-h264
         PRIVATE
         FFmpeg::FFmpeg
         nanobench
         ffmpeg_depends
-    )
-else()
-    target_link_libraries(
-        kmsgrab-h264
-        PRIVATE
-        PkgConfig::ffmpeg
-        nanobench
     )
 endif()
 
@@ -198,6 +223,8 @@ if(WITH_SYSTEM_FFMPEG)
         PkgConfig::drm
         PkgConfig::va
         PkgConfig::ffmpeg
+        ${m}
+        Threads::Threads
     )
 else()
     target_link_libraries(
@@ -217,6 +244,8 @@ if(WITH_SYSTEM_FFMPEG)
         av-transfer-pixfmt
         PRIVATE
         PkgConfig::ffmpeg
+        ${m}
+        Threads::Threads
     )
 else()
     target_link_libraries(
@@ -236,6 +265,8 @@ if(WITH_SYSTEM_FFMPEG)
         hw-decode
         PRIVATE
         PkgConfig::ffmpeg
+        ${m}
+        Threads::Threads
     )
 else()
     target_link_libraries(

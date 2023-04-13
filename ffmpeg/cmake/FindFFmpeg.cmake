@@ -21,7 +21,7 @@ foreach(c ${components})
         LIB${C}_LIBRARY
         NAMES
             "${CMAKE_STATIC_LIBRARY_PREFIX}${c}${CMAKE_STATIC_LIBRARY_SUFFIX}"
-            lib${c}
+            "${CMAKE_SHARED_LIBRARY_PREFIX}${c}${CMAKE_SHARED_LIBRARY_SUFFIX}"
         HINTS
             ${FFMPEG_ROOT}/lib${c}
     )
