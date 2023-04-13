@@ -276,3 +276,24 @@ else()
         ffmpeg_depends
     )
 endif()
+
+add_executable(
+    rkmpp-decode
+    rkmpp_decode.c
+)
+if(WITH_SYSTEM_FFMPEG)
+    target_link_libraries(
+        rkmpp-decode
+        PRIVATE
+        PkgConfig::ffmpeg
+        ${m}
+        Threads::Threads
+    )
+else()
+    target_link_libraries(
+        rkmpp-decode
+        PRIVATE
+        FFmpeg::FFmpeg
+        ffmpeg_depends
+    )
+endif()
