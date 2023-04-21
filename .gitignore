@@ -13,4 +13,5 @@ build-*-MinSizeRel/
 build-*-RelWithDebInfo/
 build-*-Profile/
 build/
+imgui/imgui.ini
 

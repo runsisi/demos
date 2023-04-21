@@ -1,0 +1,8 @@
+[submodule "third/imgui"]
+	path = third/imgui
+	url = git@github.com:ocornut/imgui.git
+	branch = docking
+[submodule "third/sdl"]
+	path = third/sdl
+	url = git@github.com:libsdl-org/SDL.git
+	branch = docking
