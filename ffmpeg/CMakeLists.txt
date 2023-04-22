@@ -275,6 +275,12 @@ else()
         FFmpeg::FFmpeg
         ffmpeg_depends
     )
+    set_target_properties(
+        hw-decode
+        PROPERTIES
+        BUILD_RPATH
+        "${FFMPEG_LIBRARY_DIRS}"
+    )
 endif()
 
 add_executable(

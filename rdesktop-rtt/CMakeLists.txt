@@ -54,6 +54,7 @@ set_target_properties(rdesktop-rtt PROPERTIES
 
 include(GNUInstallDirs)
 install(TARGETS rdesktop-rtt
+    OPTIONAL
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

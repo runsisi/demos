@@ -27,6 +27,8 @@ foreach(c ${components})
     )
 
     get_filename_component(LIB${C}_INCLUDE_DIR "${LIB${C}_INCLUDE_DIR}" DIRECTORY)
+    get_filename_component(LIB${C}_LIBRARY_DIR "${LIB${C}_LIBRARY}" DIRECTORY)
+    list(APPEND FFMPEG_LIBRARY_DIRS "${LIB${C}_LIBRARY_DIR}")
 
     add_library(ffmpeg::${c} UNKNOWN IMPORTED)
     set_target_properties(
@@ -47,7 +49,7 @@ foreach(c ${components})
 endforeach()
 
 list(REMOVE_DUPLICATES FFMPEG_INCLUDE_DIR)
-list(REMOVE_DUPLICATES FFMPEG_LIBRARY)
+list(REMOVE_DUPLICATES FFMPEG_LIBRARY_DIRS)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
@@ -63,6 +65,7 @@ mark_as_advanced(
     FFMPEG_LIBRARY
     ${FFMPEG_VARS}
     FFMPEG_VARS
+    FFMPEG_LIBRARY_DIRS
 )
 
 if(FFmpeg_FOUND)

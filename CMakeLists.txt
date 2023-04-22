@@ -4,6 +4,8 @@ project(demos)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 20)
 
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+
 add_subdirectory(gro)
 add_subdirectory(gtype)
 add_subdirectory(kfprobe)

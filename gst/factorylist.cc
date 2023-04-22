@@ -1,7 +1,7 @@
 #include <string>
 
 #include <glib-2.0/glib.h>
-#include <gstreamer-1.0/gst/gst.h>
+#include <gst/gst.h>
 
 #define gst_syslog(priority, str, ...) printf("Gstreamer plugin: " str "\n", ## __VA_ARGS__)
 
