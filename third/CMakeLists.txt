@@ -25,3 +25,16 @@ target_link_libraries(
     PUBLIC
     SDL2::SDL2
 )
+
+find_package(Threads REQUIRED)
+
+add_library(asio INTERFACE)
+target_compile_definitions(asio INTERFACE ASIO_STANDALONE)
+target_include_directories(asio INTERFACE asio/asio/include)
+target_link_libraries(asio INTERFACE Threads::Threads)
+
+export(TARGETS asio
+    FILE asio.cmake
+    NAMESPACE asio::)
+
+add_library(asio::asio ALIAS asio)
