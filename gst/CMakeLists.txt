@@ -60,3 +60,20 @@ install(
     OPTIONAL
     DESTINATION bin
 )
+
+add_executable(asio-h264player asio-h264player.cc)
+target_link_libraries(
+    asio-h264player
+    PRIVATE
+    imgui
+    ${gl}
+    PkgConfig::glib
+    GStreamer::GStreamer
+    asio::asio
+)
+set_target_properties(
+    asio-h264player
+    PROPERTIES
+    BUILD_RPATH
+    "${GSTREAMER_LIBRARY_DIRS}"
+)
