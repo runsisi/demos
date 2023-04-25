@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
 	iphdr.ip_tos = IPTOS_CLASS_DEFAULT;
 	iphdr.ip_len = htonl(pkt_len);
 	iphdr.ip_id = htons(0);
-	iphdr.ip_off = htons(0);
+	iphdr.ip_off = htons(IP_DF);
 	iphdr.ip_ttl = 1;
 	iphdr.ip_p = IPPROTO_IGMP;
 	iphdr.ip_src = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr;
