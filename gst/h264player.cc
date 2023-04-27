@@ -40,9 +40,11 @@ static gboolean bus_call(GstBus * bus, GstMessage * msg, gpointer data) {
         break;
     }
     default:
+        g_print("misc message: %d!\n", GST_MESSAGE_TYPE (msg));
         break;
     }
 
+    // means G_SOURCE_CONTINUE
     return TRUE;
 }
 

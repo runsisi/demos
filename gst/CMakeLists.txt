@@ -77,3 +77,20 @@ set_target_properties(
     BUILD_RPATH
     "${GSTREAMER_LIBRARY_DIRS}"
 )
+
+add_executable(asio-h264player2 asio-h264player2.cc)
+target_link_libraries(
+    asio-h264player2
+    PRIVATE
+    imgui
+    ${gl}
+    PkgConfig::glib
+    GStreamer::GStreamer
+    asio::asio
+)
+set_target_properties(
+    asio-h264player2
+    PROPERTIES
+    BUILD_RPATH
+    "${GSTREAMER_LIBRARY_DIRS}"
+)

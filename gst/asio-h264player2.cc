@@ -30,22 +30,24 @@ void schedule_wait(asio::executor_work_guard<asio::io_context::executor_type> &w
                 break;
             }
             default:
-                g_print("misc message: %d!\n", GST_MESSAGE_TYPE (msg));
+                g_print("misc message!\n");
 
                 // reschedule wait
                 schedule_wait(wg, descriptor, bus);
                 break;
             }
-
-            gst_message_unref (msg);
         }
     );
 }
 
+GstBusSyncReply sync_handler(GstBus *bus, GstMessage *msg, void *lambda)
+{
+    return (*(std::function<GstBusSyncReply(GstBus *, GstMessage *)>*)(lambda))(bus, msg);
+    // return (*static_cast<std::function<GstBusSyncReply(GstBus *, GstMessage *)>*>(lambda))(bus, msg);
+}
+
 int main(int argc, char *argv[]) {
     gst_init(&argc, &argv);
-
-    // GMainLoop *loop = g_main_loop_new(NULL, FALSE);
 
     asio::io_context ioctx;
     // Prevent io_context::run from returning
@@ -63,6 +65,37 @@ int main(int argc, char *argv[]) {
 
     GstBus *bus;
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
+
+    auto lambda = new std::function<GstBusSyncReply(GstBus *, GstMessage *)>([&wg](GstBus *bus, GstMessage *msg) {
+        switch (GST_MESSAGE_TYPE (msg)) {
+        case GST_MESSAGE_EOS:
+            g_print("End of stream\n");
+            wg.reset();
+            break;
+
+        case GST_MESSAGE_ERROR: {
+            gchar *debug;
+            GError *error;
+
+            gst_message_parse_error(msg, &error, &debug);
+            g_free(debug);
+
+            g_printerr("Error: %s\n", error->message);
+            g_error_free(error);
+
+            wg.reset();
+            break;
+        }
+        default:
+            g_print("misc message: %d!\n", GST_MESSAGE_TYPE (msg));
+        }
+
+        gst_message_unref (msg);
+
+        return GST_BUS_DROP;
+    });
+
+    gst_bus_set_sync_handler(bus, sync_handler, lambda, NULL);
 
     gst_bin_add_many(GST_BIN (pipeline), source, parser, decoder, sink, NULL);
 
@@ -85,12 +118,6 @@ int main(int argc, char *argv[]) {
     g_print("Running...\n");
     // g_main_loop_run(loop);
 
-    GPollFD pfd;
-    gst_bus_get_pollfd(bus, &pfd);
-
-    asio::posix::stream_descriptor descriptor(ioctx, pfd.fd);
-    schedule_wait(wg, descriptor, bus);
-
     ioctx.run();
 
     gst_object_unref(bus);
@@ -101,6 +128,8 @@ int main(int argc, char *argv[]) {
 
     g_print("Deleting pipeline\n");
     gst_object_unref(GST_OBJECT (pipeline));
+
+    delete lambda;
 
     return 0;
 }
