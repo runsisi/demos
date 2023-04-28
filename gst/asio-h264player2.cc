@@ -3,6 +3,21 @@
 #include <gst/gst.h>
 #include <asio.hpp>
 
+static void
+on_pad_added(GstElement *element, GstPad *pad, gpointer data) {
+    GstPad *sinkpad;
+    GstElement *parser = (GstElement *) data;
+
+    /* We can now link this pad with the decoder sink pad */
+    g_print("Dynamic pad created, linking demux/parse\n");
+
+    sinkpad = gst_element_get_static_pad(parser, "sink");
+
+    gst_pad_link(pad, sinkpad);
+
+    gst_object_unref(sinkpad);
+}
+
 void schedule_wait(asio::executor_work_guard<asio::io_context::executor_type> &wg,
     asio::posix::stream_descriptor &descriptor, GstBus *bus)
 {
@@ -54,9 +69,10 @@ int main(int argc, char *argv[]) {
     // https://dens.website/tutorials/cpp-asio/work
     asio::executor_work_guard<asio::io_context::executor_type> wg = asio::make_work_guard(ioctx);
 
-    GstElement *pipeline, *source, *sink, *parser, *decoder;
+    GstElement *pipeline, *source, *sink, *demux, *parser, *decoder;
     pipeline = gst_pipeline_new("h264-player");
     source = gst_element_factory_make("filesrc", "file-source");
+    demux = gst_element_factory_make("qtdemux", "demux");
     parser = gst_element_factory_make("h264parse", "h264-parser");
     decoder = gst_element_factory_make("openh264dec", "decoder");
     sink = gst_element_factory_make("autovideosink", "video-output");
@@ -97,11 +113,11 @@ int main(int argc, char *argv[]) {
 
     gst_bus_set_sync_handler(bus, sync_handler, lambda, NULL);
 
-    gst_bin_add_many(GST_BIN (pipeline), source, parser, decoder, sink, NULL);
+    gst_bin_add_many(GST_BIN (pipeline), source, demux, parser, decoder, sink, NULL);
 
-    // gst_element_link(source, parser);
-    gst_element_link_many(source, parser, decoder, sink, NULL);
-    // g_signal_connect (parser, "pad-added", G_CALLBACK(on_pad_added), decoder);
+    gst_element_link(source, demux);
+    gst_element_link_many(parser, decoder, sink, NULL);
+    g_signal_connect (demux, "pad-added", G_CALLBACK(on_pad_added), parser);
 
     /* note that the demuxer will be linked to the decoder dynamically.
      The reason is that Ogg may contain various streams (for example
