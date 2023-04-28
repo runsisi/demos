@@ -94,3 +94,20 @@ set_target_properties(
     BUILD_RPATH
     "${GSTREAMER_LIBRARY_DIRS}"
 )
+
+add_executable(uv-h264player uv-h264player.cc)
+target_link_libraries(
+    uv-h264player
+    PRIVATE
+    imgui
+    ${gl}
+    PkgConfig::glib
+    GStreamer::GStreamer
+    uv_a
+)
+set_target_properties(
+    uv-h264player
+    PROPERTIES
+    BUILD_RPATH
+    "${GSTREAMER_LIBRARY_DIRS}"
+)
