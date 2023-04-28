@@ -22,7 +22,9 @@ else()
 endif()
 
 find_package(PkgConfig REQUIRED)
+set(ENV{PKG_CONFIG_SYSROOT_DIR} "${GSTREAMER_ROOT}")
 pkg_search_module(glib REQUIRED IMPORTED_TARGET glib-2.0)
+unset(ENV{PKG_CONFIG_SYSROOT_DIR})
 
 add_executable(factorylist factorylist.cc)
 target_link_libraries(
