@@ -113,3 +113,20 @@ set_target_properties(
     BUILD_RPATH
     "${GSTREAMER_LIBRARY_DIRS}"
 )
+
+add_executable(aml-h264player aml-h264player.cc)
+target_link_libraries(
+    aml-h264player
+    PRIVATE
+    imgui
+    ${gl}
+    PkgConfig::glib
+    GStreamer::GStreamer
+    aml::aml
+)
+set_target_properties(
+    aml-h264player
+    PROPERTIES
+    BUILD_RPATH
+    "${GSTREAMER_LIBRARY_DIRS}"
+)

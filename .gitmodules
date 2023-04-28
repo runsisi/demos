@@ -12,3 +12,6 @@
 [submodule "third/libuv"]
 	path = third/libuv
 	url = git@github.com:libuv/libuv.git
+[submodule "third/aml"]
+	path = third/aml
+	url = git@github.com:any1/aml.git
