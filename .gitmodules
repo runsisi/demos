@@ -9,3 +9,6 @@
 [submodule "third/asio"]
 	path = third/asio
 	url = git@github.com:chriskohlhoff/asio.git
+[submodule "third/libuv"]
+	path = third/libuv
+	url = git@github.com:libuv/libuv.git

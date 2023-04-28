@@ -38,3 +38,6 @@ export(TARGETS asio
     NAMESPACE asio::)
 
 add_library(asio::asio ALIAS asio)
+
+set(LIBUV_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+add_subdirectory(libuv)
