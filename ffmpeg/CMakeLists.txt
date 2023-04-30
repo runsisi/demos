@@ -72,7 +72,7 @@ else() # WITH_SYSTEM_FFMPEG
     find_package(ZLIB REQUIRED)
     find_package(BZip2 REQUIRED)
     find_package(LibLZMA REQUIRED)
-    find_package(sdl2 REQUIRED CONFIG)
+    find_package(SDL2 REQUIRED CONFIG)
 
     pkg_check_modules(alsa IMPORTED_TARGET alsa)
     pkg_check_modules(sndio IMPORTED_TARGET sndio)
