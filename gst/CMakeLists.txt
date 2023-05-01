@@ -130,3 +130,5 @@ set_target_properties(
     BUILD_RPATH
     "${GSTREAMER_LIBRARY_DIRS}"
 )
+
+add_subdirectory(qt)
