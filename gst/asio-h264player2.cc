@@ -74,7 +74,7 @@ int main(int argc, char *argv[]) {
     source = gst_element_factory_make("filesrc", "file-source");
     demux = gst_element_factory_make("qtdemux", "demux");
     parser = gst_element_factory_make("h264parse", "h264-parser");
-    decoder = gst_element_factory_make("openh264dec", "decoder");
+    decoder = gst_element_factory_make("avdec_h264", "decoder");
     sink = gst_element_factory_make("autovideosink", "video-output");
 
     g_object_set(G_OBJECT (source), "location", argv[1], NULL);

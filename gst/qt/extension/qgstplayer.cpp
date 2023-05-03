@@ -384,7 +384,7 @@ Player::Player(QObject *parent, VideoRenderer *renderer)
 {
 
     player_ = gst_player_new(renderer ? renderer->renderer() : 0,
-        gst_player_qt_signal_dispatcher_new(this));
+        NULL);
 
     g_object_connect(player_,
         "swapped-signal::state-changed", G_CALLBACK (Player::onStateChanged), this,
@@ -823,6 +823,7 @@ struct _GstPlayerQtSignalDispatcher
   GObject parent;
 
   gpointer player;
+  gpointer context;
 };
 
 struct _GstPlayerQtSignalDispatcherClass
@@ -838,6 +839,7 @@ enum
 {
   QT_SIGNAL_DISPATCHER_PROP_0,
   QT_SIGNAL_DISPATCHER_PROP_PLAYER,
+  QT_SIGNAL_DISPATCHER_PROP_CONTEXT,
   QT_SIGNAL_DISPATCHER_PROP_LAST
 };
 
@@ -869,6 +871,9 @@ gst_player_qt_signal_dispatcher_set_property (GObject * object,
     case QT_SIGNAL_DISPATCHER_PROP_PLAYER:
       self->player = g_value_get_pointer (value);
       break;
+  case QT_SIGNAL_DISPATCHER_PROP_CONTEXT:
+      self->context = g_value_get_pointer (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -885,6 +890,9 @@ gst_player_qt_signal_dispatcher_get_property (GObject * object,
   switch (prop_id) {
     case QT_SIGNAL_DISPATCHER_PROP_PLAYER:
       g_value_set_pointer (value, self->player);
+      break;
+    case QT_SIGNAL_DISPATCHER_PROP_CONTEXT:
+      g_value_set_pointer (value, self->context);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -908,6 +916,11 @@ static void
   qt_signal_dispatcher_param_specs
       [QT_SIGNAL_DISPATCHER_PROP_PLAYER] =
       g_param_spec_pointer ("player", "Player instance", "",
+      static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+
+  qt_signal_dispatcher_param_specs
+      [QT_SIGNAL_DISPATCHER_PROP_CONTEXT] =
+      g_param_spec_pointer ("application-context", "Main loop context", "",
       static_cast<GParamFlags>(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_properties (gobject_class,
@@ -949,5 +962,5 @@ gst_player_qt_signal_dispatcher_new (gpointer player)
 {
   return static_cast<GstPlayerSignalDispatcher*>
   (g_object_new (GST_TYPE_PLAYER_QT_SIGNAL_DISPATCHER,
-      "player", player, NULL));
+      "player", player, "application-context", g_main_context_default(), NULL));
 }

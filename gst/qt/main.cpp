@@ -27,6 +27,8 @@
 #include <QUrl>
 #include <gst/gst.h>
 
+#include "glib_mainloop_on_qeventloop.h"
+
 int main(int argc, char *argv[])
 {
     /* Use QApplication instead of QGuiApplication since the latter is needed
@@ -61,6 +63,8 @@ int main(int argc, char *argv[])
     engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
 
     QObject *rootObject = engine.rootObjects().first();
+
+    GLibMainloopOnQEventLoop::setup(rootObject);
 
     QObject *player = rootObject->findChild<QObject*>("player");
     QObject *videoItem = rootObject->findChild<QObject*>("videoItem");
