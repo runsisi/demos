@@ -37,6 +37,9 @@ ApplicationWindow {
     y: 30
     color: "black"
 //    title : player.mediaInfo.title
+    onClosing: {
+        player.stop()
+    }
 
     Player {
         id: player
