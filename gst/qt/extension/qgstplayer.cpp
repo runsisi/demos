@@ -382,9 +382,12 @@ Player::Player(QObject *parent, VideoRenderer *renderer)
     , subtitleEnabled_(false)
     , autoPlay_(false)
 {
-
+    // signal dispatcher is not needed, can be NULL
+    // signal flows: GstPlay->api_bus -> GstPlayer->signal_adapter -> Player
     player_ = gst_player_new(renderer ? renderer->renderer() : 0,
-        NULL);
+            /*gst_player_qt_signal_dispatcher_new(this)*/
+            gst_player_g_main_context_signal_dispatcher_new(g_main_context_default())
+            /*NULL*/);
 
     g_object_connect(player_,
         "swapped-signal::state-changed", G_CALLBACK (Player::onStateChanged), this,
@@ -960,6 +963,10 @@ gst_player_qt_signal_dispatcher_interface_init
 GstPlayerSignalDispatcher *
 gst_player_qt_signal_dispatcher_new (gpointer player)
 {
+  // only application-context is needed to provide a GMainContext instead of GMainContext
+  // from g_main_context_get_thread_default(), see gst_player_constructed
+  // since gst_player_new() is called in main thread which means g_main_context_get_thread_default()
+  // returns NULL, so GstPlayer->signal_adapter will be dispatched by default GMainContext
   return static_cast<GstPlayerSignalDispatcher*>
   (g_object_new (GST_TYPE_PLAYER_QT_SIGNAL_DISPATCHER,
       "player", player, "application-context", g_main_context_default(), NULL));

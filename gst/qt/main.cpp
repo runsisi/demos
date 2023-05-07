@@ -64,6 +64,7 @@ int main(int argc, char *argv[])
 
     QObject *rootObject = engine.rootObjects().first();
 
+    // run glib default main loop if QT_NO_GLIB is set
     GLibMainloopOnQEventLoop::setup(rootObject);
 
     QObject *player = rootObject->findChild<QObject*>("player");
