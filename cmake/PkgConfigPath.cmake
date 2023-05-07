@@ -1,7 +1,9 @@
 #
-# Warning: Cannot generate a safe runtime search path for target
+# Warning: "Cannot generate a safe runtime search path for target" can not be disabled
 # see cmake cmOrderDirectories::FindImplicitConflicts()
 #
+
+find_package(PkgConfig REQUIRED)
 
 macro(set_pkgconfig_path root)
     set(ENV{PKG_CONFIG_SYSROOT_DIR} "${root}")
@@ -28,3 +30,29 @@ macro(unset_pkgconfig_path)
     unset(ENV{PKG_CONFIG_LIBDIR})
     unset(PC_DIRS)
 endmacro()
+
+function(pkg_check_modules root)
+    get_filename_component(name "${root}" NAME)
+
+    if(NOT "${root}" STREQUAL "" AND "${root}" STREQUAL "${name}")
+        # this is a PkgConfig prefix, not a root path
+        _pkg_check_modules(${ARGV})
+    else()
+        set_pkgconfig_path("${root}")
+        _pkg_check_modules(${ARGN})
+        unset_pkgconfig_path()
+    endif()
+endfunction()
+
+function(pkg_search_module root)
+    get_filename_component(name "${root}" NAME)
+
+    if(NOT "${root}" STREQUAL "" AND "${root}" STREQUAL "${name}")
+        # this is a PkgConfig prefix, not a root path
+        _pkg_search_module(${ARGV})
+    else()
+        set_pkgconfig_path("${root}")
+        _pkg_search_module(${ARGN})
+        unset_pkgconfig_path()
+    endif()
+endfunction()

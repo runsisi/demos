@@ -14,10 +14,8 @@ find_package(
 
 find_package(PkgConfig REQUIRED)
 
-set_pkgconfig_path(${INSTALL_ROOT})
 pkg_check_modules(glib REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0 gmodule-2.0 gobject-2.0 gthread-2.0)
 pkg_check_modules(gst REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-player-1.0 gstreamer-tag-1.0)
-unset_pkgconfig_path()
 
 foreach(d ${gst_LIBRARY_DIRS})
     list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${d}" isSystemDir)

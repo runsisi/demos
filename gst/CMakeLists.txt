@@ -14,12 +14,8 @@ set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 # cmake options
 set(INSTALL_ROOT "$ENV{HOME}/working/arch/built" CACHE STRING "install root")
 
-find_package(PkgConfig REQUIRED)
-
-set_pkgconfig_path(${INSTALL_ROOT})
-pkg_check_modules(glib REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0 gmodule-2.0 gobject-2.0 gthread-2.0)
-pkg_check_modules(gst REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-player-1.0 gstreamer-tag-1.0)
-unset_pkgconfig_path()
+pkg_check_modules(${INSTALL_ROOT} glib REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0 gmodule-2.0 gobject-2.0 gthread-2.0)
+pkg_check_modules(${INSTALL_ROOT} gst REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-player-1.0 gstreamer-tag-1.0)
 
 foreach(d ${gst_LIBRARY_DIRS})
     list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${d}" isSystemDir)
