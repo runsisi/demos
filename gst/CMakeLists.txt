@@ -43,3 +43,5 @@ set_target_properties(
     BUILD_RPATH
     "${RPATH_DIRS}"
 )
+
+add_subdirectory(pipeline)
