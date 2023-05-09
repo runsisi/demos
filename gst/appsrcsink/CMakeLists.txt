@@ -41,3 +41,23 @@ if(HAVE_GTK)
         PkgConfig::gtk
     )
 endif()
+
+add_executable(gst-appsink-async appsink-async.cc)
+target_link_libraries(
+    gst-appsink-async
+    PRIVATE
+    PkgConfig::gst
+    PkgConfig::glib
+)
+if(HAVE_GTK)
+    target_compile_definitions(
+        gst-appsink-async
+        PRIVATE
+        HAVE_GTK
+    )
+    target_link_libraries(
+        gst-appsink-async
+        PRIVATE
+        PkgConfig::gtk
+    )
+endif()
