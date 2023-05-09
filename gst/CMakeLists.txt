@@ -27,7 +27,7 @@ endforeach()
 list(TRANSFORM RPATH_DIRS APPEND /gstreamer-1.0)
 list(JOIN RPATH_DIRS ":" RPATH_DIRS)
 
-add_subdirectory(glibloop)
+add_subdirectory(glibmainloop)
 add_subdirectory(qt)
 
 add_executable(factorylist factorylist.cc)
@@ -44,4 +44,4 @@ set_target_properties(
     "${RPATH_DIRS}"
 )
 
-add_subdirectory(pipeline)
+add_subdirectory(appsrcsink)
