@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-#define PROG_NAME					"igmpreport"
+#define PROG_NAME					"ipopt"
 
 #define DEFAULT_IGMP_VER			3
 #define DEFAULT_IGMP_GROUP          "239.0.0.33"
@@ -21,19 +21,10 @@
 #define DEFAULT_RESP_INTERVAL		50	// 50/10 = 5s
 
 
-struct igmpv3 {
-    struct igmp v2;
-    uint8_t record_type;
-    uint8_t aux_data_len;
-    uint16_t num_src;
-    struct in_addr multicast_address;
-};
-
 static struct {
-    unsigned int igmp_version;        /* IGMP Version */
-    char *if_name;                    /* Network interface for binding */
-    unsigned int report_interval;     /* IGMP query interval */
-    struct in_addr group;             /* IGMP group address */
+    char *if_name;                  // Network interface for binding
+    unsigned int interval;              // send interval */
+    struct in_addr group;             // dest address */
 } args;
 
 atomic_int stopped = 0;
@@ -74,19 +65,17 @@ void print_usage(void) {
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "    -h             : Print help message.\n");
     fprintf(stderr, "    -i interface   : Specify network interface.\n");
-    fprintf(stderr, "    -v version     : Specify IGMP version. Default: %d\n", DEFAULT_IGMP_VER);
-    fprintf(stderr, "    -g group       : Specify IGMP group address. Default: %s\n", DEFAULT_IGMP_GROUP);
-    fprintf(stderr, "    -r interval    : Set membership report interval in seconds. Default: %d\n",
+    fprintf(stderr, "    -a address     : Specify ping address.");
+    fprintf(stderr, "    -r interval    : Set ping interval in seconds. Default: %d\n",
         DEFAULT_INTERVAL);
 }
 
 int main(int argc, char **argv) {
     int opt;
 
-    args.igmp_version = DEFAULT_IGMP_VER;
-    args.report_interval = DEFAULT_INTERVAL;
+    args.interval = DEFAULT_INTERVAL;
 
-    while ((opt = getopt(argc, argv, "hv:i:r:g:")) != -1) {
+    while ((opt = getopt(argc, argv, "hv:i:r:a:")) != -1) {
         switch (opt) {
         case 'h':
             print_usage();
@@ -94,24 +83,17 @@ int main(int argc, char **argv) {
         case 'i':
             args.if_name = strdup(optarg);
             break;
-        case 'v':
-            args.igmp_version = atoi(optarg);
-            break;
-        case 'g': {
-            struct in_addr addr;    // group address
+        case 'a': {
+            struct in_addr addr;    // ping address
             if (inet_aton(optarg, &addr) == 0) {
-                fprintf(stderr, "malformed multicast address: %s\n", optarg);
-                exit(1);
-            }
-            if (!IN_MULTICAST(ntohl(addr.s_addr))) {
-                fprintf(stderr, "illegal multicast address: %s\n", optarg);
+                fprintf(stderr, "malformed ping address: %s\n", optarg);
                 exit(1);
             }
             args.group.s_addr = addr.s_addr;
             break;
         }
         case 'r':
-            args.report_interval = atoi(optarg);
+            args.interval = atoi(optarg);
             break;
         default:
             print_usage();
@@ -253,7 +235,7 @@ int main(int argc, char **argv) {
             break;
         }
 
-        sleep(args.report_interval);
+        sleep(args.interval);
     }
 
     close(fd);

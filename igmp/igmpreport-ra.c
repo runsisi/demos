@@ -17,7 +17,7 @@
 
 #define DEFAULT_IGMP_VER			3
 #define DEFAULT_IGMP_GROUP          "239.0.0.33"
-#define DEFAULT_REPORT_INTERVAL		10	// 10s
+#define DEFAULT_INTERVAL		10	// 10s
 #define DEFAULT_RESP_INTERVAL		50	// 50/10 = 5s
 
 
@@ -77,7 +77,7 @@ void print_usage(void) {
     fprintf(stderr, "    -v version     : Specify IGMP version. Default: %d\n", DEFAULT_IGMP_VER);
     fprintf(stderr, "    -g group       : Specify IGMP group address. Default: %s\n", DEFAULT_IGMP_GROUP);
     fprintf(stderr, "    -r interval    : Set membership report interval in seconds. Default: %d\n",
-        DEFAULT_REPORT_INTERVAL);
+        DEFAULT_INTERVAL);
 }
 
 struct ipra {
@@ -89,7 +89,7 @@ int main(int argc, char **argv) {
     int opt;
 
     args.igmp_version = DEFAULT_IGMP_VER;
-    args.report_interval = DEFAULT_REPORT_INTERVAL;
+    args.report_interval = DEFAULT_INTERVAL;
 
     while ((opt = getopt(argc, argv, "hv:i:r:g:")) != -1) {
         switch (opt) {
