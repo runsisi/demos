@@ -15,7 +15,7 @@
 #define PROG_NAME					"igmpquery"
 
 #define DEFAULT_IGMP_VER			3
-#define DEFAULT_QUERY_INTERVAL		10	// 10s
+#define DEFAULT_REPORT_INTERVAL		10	// 10s
 #define DEFAULT_RESP_INTERVAL		50	// 50/10 = 5s
 
 
@@ -82,7 +82,7 @@ void print_usage(void) {
 	fprintf(stderr, "    -i interface   : Specify network interface.\n");
 	fprintf(stderr, "    -v version     : Specify IGMP version. Default: %d\n", DEFAULT_IGMP_VER);
 	fprintf(stderr, "    -q interval    : Set general query interval in seconds. Default: %d\n",
-			DEFAULT_QUERY_INTERVAL);
+			DEFAULT_REPORT_INTERVAL);
 	fprintf(stderr, "    -r interval    : Set query response interval in 1/10th of second. Default: %d\n",
 			DEFAULT_RESP_INTERVAL);
 }
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
 	int opt;
 
 	args.igmp_version = DEFAULT_IGMP_VER;
-	args.query_interval = DEFAULT_QUERY_INTERVAL;
+	args.query_interval = DEFAULT_REPORT_INTERVAL;
 	args.resp_interval = DEFAULT_RESP_INTERVAL;
 
 	while ((opt = getopt(argc, argv, "hv:i:q:r:")) != -1) {

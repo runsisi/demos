@@ -5,3 +5,4 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 
 add_executable(igmpquery igmpquery.c)
+add_executable(igmpreport igmpreport.c)
