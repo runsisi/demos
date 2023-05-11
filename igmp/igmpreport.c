@@ -57,7 +57,7 @@ uint16_t checksum(uint16_t *addr, int len) {
 
     // Add partial block if available at the end of data
     if (len > 0) {
-        sum += *(uint8_t *)addr;
+        sum += ntohs(*(uint8_t *)addr);
     }
 
     // Sum lower 16 bits and upper 16 bits
