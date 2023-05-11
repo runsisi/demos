@@ -8,6 +8,8 @@
 
 #define CAPS "video/x-raw,format=RGB,width=160,pixel-aspect-ratio=1/1"
 
+GMainLoop *loop;
+
 gboolean bus_callback(GstBus *bus, GstMessage *msg, gpointer data) {
     GMainLoop *loop = (GMainLoop *)data;
 
@@ -40,6 +42,38 @@ gboolean bus_callback(GstBus *bus, GstMessage *msg, gpointer data) {
     return TRUE;
 }
 
+void start(gpointer user_data) {
+    GstStateChangeReturn ret;
+
+    GstPipeline *pipeline = (GstPipeline *)user_data;
+
+    /* set to PLAYING to make the frame arrive in the sink */
+    ret = gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_PLAYING);
+    switch (ret) {
+    case GST_STATE_CHANGE_FAILURE:
+        g_print("failed to play the file\n");
+        g_main_loop_quit(loop);
+    case GST_STATE_CHANGE_NO_PREROLL:
+        /* for live sources, we need to set the pipeline to PLAYING before we can
+         * receive a buffer. We don't do that yet */
+        g_print("live sources not supported yet\n");
+        g_main_loop_quit(loop);
+    case GST_STATE_CHANGE_SUCCESS: {
+        /* get sink */
+        GstElement *sink = gst_bin_get_by_name(GST_BIN (pipeline), "sink");
+        gst_element_post_message(GST_ELEMENT (pipeline),
+            gst_message_new_async_done(GST_OBJECT (sink), GST_CLOCK_TIME_NONE));
+        gst_object_unref(sink);
+
+        g_main_loop_quit(loop);
+        break;
+    }
+    default:
+        // GST_STATE_CHANGE_ASYNC
+        break;
+    }
+}
+
 void async_done(GstBus *bus, GstMessage *message, gpointer user_data) {
     GstElement *pipeline, *sink;
     gint width, height;
@@ -58,7 +92,8 @@ void async_done(GstBus *bus, GstMessage *message, gpointer user_data) {
     ret = gst_element_get_state(pipeline, NULL, NULL, 5 * GST_SECOND);
     if (ret == GST_STATE_CHANGE_FAILURE) {
         g_print("failed to play the file\n");
-        exit(-1);
+        g_main_loop_quit(loop);
+        return;
     }
 
     /* get sink */
@@ -83,7 +118,8 @@ void async_done(GstBus *bus, GstMessage *message, gpointer user_data) {
 
     /* get the preroll buffer from appsink, this block untils appsink really
      * prerolls */
-    g_signal_emit_by_name(sink, "pull-preroll", &sample, NULL);
+    // only return samples when the appsink is in the PLAYING state.
+    g_signal_emit_by_name(sink, "pull-sample", &sample, NULL);
 
     /* if we have a buffer now, convert it to a pixbuf. It's possible that we
      * don't have a buffer because we went EOS right away or had an error. */
@@ -130,14 +166,15 @@ void async_done(GstBus *bus, GstMessage *message, gpointer user_data) {
     } else {
         g_print("could not make snapshot\n");
     }
+
+    g_main_loop_quit(loop);
 }
 
 int
 main(int argc, char *argv[]) {
-    GstElement *pipeline, *sink;
+    GstElement *pipeline;
     gchar *descr;
     GError *error = NULL;
-    GstStateChangeReturn ret;
 
     gst_init(&argc, &argv);
 
@@ -147,11 +184,10 @@ main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+    loop = g_main_loop_new(NULL, FALSE);
 
     /* create a new pipeline */
-    descr =
-        g_strdup_printf("uridecodebin uri=%s ! videoconvert ! videoscale ! "
+    descr = g_strdup_printf("uridecodebin uri=%s ! videoconvert ! videoscale ! "
                         " appsink name=sink caps=\"" CAPS "\"", argv[1]);
     pipeline = gst_parse_launch(descr, &error);
 
@@ -168,27 +204,7 @@ main(int argc, char *argv[]) {
     g_signal_connect(bus, "message::async-done", G_CALLBACK(async_done), pipeline);
     gst_object_unref(bus);
 
-    /* set to PAUSED to make the first frame arrive in the sink */
-    ret = gst_element_set_state(pipeline, GST_STATE_READY);
-    switch (ret) {
-    case GST_STATE_CHANGE_FAILURE:
-        g_print("failed to play the file\n");
-        exit(-1);
-    case GST_STATE_CHANGE_NO_PREROLL:
-        /* for live sources, we need to set the pipeline to PLAYING before we can
-         * receive a buffer. We don't do that yet */
-        g_print("live sources not supported yet\n");
-        exit(-1);
-    default:
-        break;
-    }
-
-    if (ret == GST_STATE_CHANGE_SUCCESS) {
-        /* get sink */
-        sink = gst_bin_get_by_name(GST_BIN (pipeline), "sink");
-        gst_element_post_message (GST_ELEMENT (sink),
-            gst_message_new_async_done (GST_OBJECT (sink), GST_CLOCK_TIME_NONE));
-    }
+    g_timeout_add_once(0, (GSourceOnceFunc)start, pipeline);
 
     g_main_loop_run(loop);
 
@@ -197,7 +213,6 @@ main(int argc, char *argv[]) {
 
     /* cleanup and exit */
     gst_element_set_state(pipeline, GST_STATE_NULL);
-    gst_object_unref(sink);
     gst_object_unref(pipeline);
     g_main_loop_unref(loop);
 
