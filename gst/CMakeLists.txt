@@ -45,3 +45,4 @@ set_target_properties(
 )
 
 add_subdirectory(appsrcsink)
+add_subdirectory(gl)
