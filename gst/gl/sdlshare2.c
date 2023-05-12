@@ -157,7 +157,7 @@ poll_sdl_event(gpointer data) {
 }
 
 static gboolean
-executeCallback(gpointer data) {
+do_draw(gpointer data) {
     g_mutex_lock(&app_lock);
 
     if (!app_quit) {
@@ -170,12 +170,12 @@ executeCallback(gpointer data) {
     g_cond_signal(&app_cond);
     g_mutex_unlock(&app_lock);
 
+    // G_SOURCE_REMOVE
     return FALSE;
 }
 
 static gboolean
-on_client_draw(GstElement *glsink, GstGLContext *context, GstSample *sample,
-    gpointer data) {
+on_client_draw(GstElement *glsink, GstGLContext *context, GstSample *sample, gpointer data) {
     GstBuffer *buf = gst_sample_get_buffer(sample);
     GstCaps *caps = gst_sample_get_caps(sample);
     GstVideoFrame v_frame;
@@ -192,10 +192,11 @@ on_client_draw(GstElement *glsink, GstGLContext *context, GstSample *sample,
     g_mutex_lock(&app_lock);
 
     app_rendered = FALSE;
-    g_idle_add_full(G_PRIORITY_HIGH, executeCallback, &v_frame, NULL);
+    g_idle_add_full(G_PRIORITY_HIGH, do_draw, &v_frame, NULL);
 
-    while (!app_rendered && !app_quit)
+    while (!app_rendered && !app_quit) {
         g_cond_wait(&app_cond, &app_lock);
+    }
 
     g_mutex_unlock(&app_lock);
 
@@ -247,16 +248,14 @@ sync_bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
         g_print("got need context %s\n", context_type);
 
         if (g_strcmp0(context_type, GST_GL_DISPLAY_CONTEXT_TYPE) == 0) {
-            GstContext *display_context =
-                gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+            GstContext *display_context = gst_context_new(GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
             gst_context_set_gl_display(display_context, gst_gl_display);
             gst_element_set_context(GST_ELEMENT (msg->src), display_context);
             gst_context_unref(display_context);
         } else if (g_strcmp0(context_type, "gst.gl.app_context") == 0) {
             GstContext *app_context = gst_context_new("gst.gl.app_context", TRUE);
             GstStructure *s = gst_context_writable_structure(app_context);
-            gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, gst_gl_context,
-                NULL);
+            gst_structure_set(s, "context", GST_TYPE_GL_CONTEXT, gst_gl_context, NULL);
             gst_element_set_context(GST_ELEMENT (msg->src), app_context);
             gst_context_unref(app_context);
         }
@@ -269,17 +268,6 @@ sync_bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
 
 int
 main(int argc, char **argv) {
-    SDL_SysWMinfo info;
-    Display *display = NULL;
-    GLXContext gl_context = NULL;
-
-    GMainLoop *loop = NULL;
-    GstPipeline *pipeline = NULL;
-    GstBus *bus = NULL;
-    GstElement *glimagesink = NULL;
-    const gchar *platform;
-    GError *err = NULL;
-
     /* Initialize SDL for video output */
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         fprintf(stderr, "Unable to initialize SDL: %s\n", SDL_GetError());
@@ -307,24 +295,28 @@ main(int argc, char **argv) {
         return -1;
     }
 
-    loop = g_main_loop_new(NULL, FALSE);
-
     SDL_GL_MakeCurrent(sdl_window, sdl_gl_context);
 
     /* Loop, drawing and checking events */
     InitGL(640, 480);
+
+    SDL_SysWMinfo info;
     SDL_VERSION (&info.version);
     SDL_GetWindowWMInfo(sdl_window, &info);
+
+    Display *display = NULL;
     display = info.info.x11.display;
-    gl_context = glXGetCurrentContext();
-    platform = "glx";
     gst_gl_display = (GstGLDisplay *)gst_gl_display_x11_new_with_display(display);
 
-    gst_gl_context = gst_gl_context_new_wrapped(gst_gl_display, (guintptr)gl_context,
-            gst_gl_platform_from_string(platform), GST_GL_API_OPENGL);
+    GLXContext glx_context = NULL;
+    glx_context = glXGetCurrentContext();
+
+    gst_gl_context = gst_gl_context_new_wrapped(gst_gl_display, (guintptr)glx_context,
+            gst_gl_platform_from_string("glx"), GST_GL_API_OPENGL);
 
     gst_gl_context_activate(gst_gl_context, TRUE);
 
+    GError *err = NULL;
     if (!gst_gl_context_fill_info(gst_gl_context, &err)) {
         fprintf(stderr, "Failed to fill in wrapped GStreamer context: %s\n", err->message);
         g_clear_error(&err);
@@ -332,18 +324,24 @@ main(int argc, char **argv) {
         return -1;
     }
 
+    GstPipeline *pipeline = NULL;
     pipeline = GST_PIPELINE (gst_parse_launch
             ("videotestsrc ! video/x-raw, width=320, height=240, framerate=(fraction)30/1 ! "
              "glimagesink name=glimagesink0", NULL));
 
+    GstBus *bus = NULL;
     bus = gst_pipeline_get_bus(GST_PIPELINE (pipeline));
     gst_bus_add_signal_watch(bus);
+
+    GMainLoop *loop = NULL;
+    loop = g_main_loop_new(NULL, FALSE);
     g_signal_connect (bus, "message::error", G_CALLBACK(end_stream_cb), loop);
     g_signal_connect (bus, "message::warning", G_CALLBACK(end_stream_cb), loop);
     g_signal_connect (bus, "message::eos", G_CALLBACK(end_stream_cb), loop);
     gst_bus_enable_sync_message_emission(bus);
     g_signal_connect (bus, "sync-message", G_CALLBACK(sync_bus_call), NULL);
 
+    GstElement *glimagesink = NULL;
     glimagesink = gst_bin_get_by_name(GST_BIN (pipeline), "glimagesink0");
     g_signal_connect (G_OBJECT(glimagesink), "client-draw", G_CALLBACK(on_client_draw), NULL);
     gst_object_unref(glimagesink);
@@ -367,7 +365,7 @@ main(int argc, char **argv) {
     gst_object_unref(gst_gl_context);
     gst_object_unref(gst_gl_display);
 
-    SDL_GL_DeleteContext(gl_context);
+    SDL_GL_DeleteContext(glx_context);
 
     SDL_DestroyWindow(sdl_window);
 
