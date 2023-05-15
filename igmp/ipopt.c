@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
 
     ip_hlen = (ip_hlen + 3) & (~3);
 
-    // append icmp echo w/o data
+    // append icmp echo w/ data
     uint16_t ip_len = ip_hlen + 8 + args.data_len;
 
     char *pkt = malloc(ip_len);
