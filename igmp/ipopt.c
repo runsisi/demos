@@ -246,8 +246,8 @@ int main(int argc, char **argv) {
         icmphdr->type = ICMP_ECHO;
         icmphdr->code = 0;
         icmphdr->checksum = 0;
-        icmphdr->un.echo.id = id;
-        icmphdr->un.echo.sequence = seq++;
+        icmphdr->un.echo.id = htons(id);
+        icmphdr->un.echo.sequence = htons(seq++);
         // checksum the icmp header & data
         icmphdr->checksum = checksum((uint16_t *)icmphdr, ip_len - ip_hlen);
 
