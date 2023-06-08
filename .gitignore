@@ -14,4 +14,4 @@ build-*-RelWithDebInfo/
 build-*-Profile/
 build/
 imgui/imgui.ini
-
+!/go/**/*.mod
