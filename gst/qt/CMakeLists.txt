@@ -1,7 +1,5 @@
 include(PkgConfigPath)
 
-set(INSTALL_ROOT "$ENV{HOME}/working/arch/built" CACHE STRING "install root")
-
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
