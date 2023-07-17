@@ -30,26 +30,34 @@ endif()
 #
 
 # change FFMPEG_INSTALL_ROOT to locate ffmpeg libraries
-set(FFMPEG_INSTALL_ROOT "$ENV{HOME}/working/ubuntu/built" CACHE STRING "FFmpeg install root")
+set(FFMPEG_INSTALL_ROOT "$ENV{HOME}/working/arch/built" CACHE STRING "FFmpeg install root")
 list(APPEND CMAKE_FIND_ROOT_PATH "${FFMPEG_INSTALL_ROOT}")
 
+# we include avcodec.h using <libavcodec/avcodec.h>, so no need to get XXX_INCLUDE_DIRS
+# otherwise it will have conflicts between system time.h and libavutil/time.h
+
 find_path(AVCODEC_INCLUDE_DIRS NAMES avcodec.h PATH_SUFFIXES libavcodec)
+get_filename_component(AVCODEC_INCLUDE_DIRS "${AVCODEC_INCLUDE_DIRS}" DIRECTORY)
 find_library(AVCODEC_LIBRARIES NAMES avcodec)
 find_package_handle_standard_args(AVCODEC DEFAULT_MSG AVCODEC_LIBRARIES AVCODEC_INCLUDE_DIRS)
 
 find_path(AVFILTER_INCLUDE_DIRS NAMES avfilter.h PATH_SUFFIXES libavfilter)
+get_filename_component(AVFILTER_INCLUDE_DIRS "${AVFILTER_INCLUDE_DIRS}" DIRECTORY)
 find_library(AVFILTER_LIBRARIES NAMES avfilter)
 find_package_handle_standard_args(AVFILTER DEFAULT_MSG AVFILTER_LIBRARIES AVFILTER_INCLUDE_DIRS)
 
 find_path(AVFORMAT_INCLUDE_DIRS NAMES avformat.h PATH_SUFFIXES libavformat)
+get_filename_component(AVFORMAT_INCLUDE_DIRS "${AVFORMAT_INCLUDE_DIRS}" DIRECTORY)
 find_library(AVFORMAT_LIBRARIES NAMES avformat)
 find_package_handle_standard_args(AVFORMAT DEFAULT_MSG AVFORMAT_LIBRARIES AVFORMAT_INCLUDE_DIRS)
 
 find_path(AVUTIL_INCLUDE_DIRS NAMES avutil.h PATH_SUFFIXES libavutil)
+get_filename_component(AVUTIL_INCLUDE_DIRS "${AVUTIL_INCLUDE_DIRS}" DIRECTORY)
 find_library(AVUTIL_LIBRARIES NAMES avutil)
 find_package_handle_standard_args(AVUTIL DEFAULT_MSG AVUTIL_LIBRARIES AVUTIL_INCLUDE_DIRS)
 
 find_path(SWSCALE_INCLUDE_DIRS NAMES swscale.h PATH_SUFFIXES libswscale)
+get_filename_component(SWSCALE_INCLUDE_DIRS "${SWSCALE_INCLUDE_DIRS}" DIRECTORY)
 find_library(SWSCALE_LIBRARIES NAMES swscale)
 find_package_handle_standard_args(SWSCALE DEFAULT_MSG SWSCALE_LIBRARIES SWSCALE_INCLUDE_DIRS)
 
@@ -59,6 +67,8 @@ if (AVCODEC_FOUND AND AVFILTER_FOUND AND AVFORMAT_FOUND AND AVUTIL_FOUND AND SWS
     set(LIBAV_LIBRARIES ${AVCODEC_LIBRARIES} ${AVFILTER_LIBRARIES}
         ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES})
 endif()
+
+list(REMOVE_DUPLICATES LIBAV_INCLUDE_DIRS)
 
 add_executable(
     hw-decode2
