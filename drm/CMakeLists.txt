@@ -23,3 +23,11 @@ target_link_libraries(
     PkgConfig::xrandr
     PkgConfig::x11
 )
+
+add_executable(xrandr_info xrandr_info.cc)
+target_link_libraries(
+    xrandr_info
+    PRIVATE
+    PkgConfig::xrandr
+    PkgConfig::x11
+)

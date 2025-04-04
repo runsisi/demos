@@ -390,6 +390,17 @@ std::vector<DeviceDisplayInfo> get_device_display_info_drm(Display *display)
         }
     }
 
+    std::cout << "------ | --------- | --------- | --------- | -----------------" << endl;
+    std::cout << "Output | Card path | Vendor ID | Device ID | Device display ID" << std::endl;
+    for (const auto &output : outputs) {
+        std::cout << output.output_name << " | "
+            << output.card_path << " | "
+            << std::hex << output.card_vendor_id << " | "
+            << output.card_device_id << " | "
+            << std::dec << output.device_display_id
+            << std::endl;
+    }
+
     std::map<std::string, OutputInfo> output_map;
     for (const auto &output : outputs) {
         output_map[output.output_name] = output;
@@ -407,6 +418,12 @@ std::vector<DeviceDisplayInfo> get_device_display_info_drm(Display *display)
     }
 
     auto xrandr_outputs = get_xrandr_outputs(display, RootWindow(display, XDefaultScreen(display)));
+
+    std::cout << "--------------" << std::endl;
+    std::cout << "xrandr outputs:" << std::endl;
+    for (const auto &xoutput : xrandr_outputs) {
+        std::cout << xoutput << std::endl;
+    }
 
     std::vector<DeviceDisplayInfo> result;
 
